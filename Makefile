@@ -44,7 +44,7 @@ clean:
 
 install: $(BIN)
 	install -d $(PREFIX)/bin
-	install -m 755 $(BIN) $(PREFIX)/bin/$(BIN)
+	install -m 755 $(BIN) $(PREFIX)/bin/goose
 
 uninstall:
-	rm -f $(PREFIX)/bin/$(BIN)
+	rm -f $(PREFIX)/bin/goose
