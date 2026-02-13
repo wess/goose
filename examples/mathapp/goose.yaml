@@ -1,0 +1,18 @@
+project:
+  name: "mathapp"
+  version: "0.1.0"
+  description: "Example app using mathlib and stringlib"
+  author: "Goose Examples"
+  license: "MIT"
+
+build:
+  cc: "cc"
+  cflags: "-Wall -Wextra -std=c11"
+  includes:
+    - "src"
+
+dependencies:
+  mathlib:
+    git: "https://github.com/youruser/mathlib.git"
+  stringlib:
+    git: "https://github.com/youruser/stringlib.git"

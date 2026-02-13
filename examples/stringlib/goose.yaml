@@ -1,0 +1,14 @@
+project:
+  name: "stringlib"
+  version: "1.0.0"
+  description: "String utility functions for C"
+  author: "Goose Examples"
+  license: "MIT"
+
+build:
+  cc: "cc"
+  cflags: "-Wall -Wextra -std=c11"
+  includes:
+    - "include"
+
+dependencies:

@@ -1,0 +1,15 @@
+project:
+  name: "mathlib"
+  version: "1.0.0"
+  description: "A simple math utility library for C"
+  author: "Goose Examples"
+  license: "MIT"
+
+build:
+  cc: "cc"
+  cflags: "-Wall -Wextra -std=c11"
+  includes:
+    - "include"
+    - "src"
+
+dependencies:
