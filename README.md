@@ -244,6 +244,7 @@ dependencies:
 ```
 
 Push to GitHub and share:
+> Coming soon
 
 ```sh
 goose add https://github.com/you/mylib.git
