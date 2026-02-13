@@ -4,6 +4,6 @@
 #include "config.h"
 
 int build_project(const Config *cfg, int release);
-int build_clean(const Config *cfg);
+int build_clean(void);
 
 #endif

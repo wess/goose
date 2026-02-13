@@ -1,0 +1,16 @@
+project:
+  name: "gdexample"
+  version: "0.1.0"
+  description: "Example project using libgd"
+  author: ""
+  license: "MIT"
+
+build:
+  cc: "cc"
+  cflags: "-Wall -Wextra -std=c11"
+  includes:
+    - "src"
+
+dependencies:
+  libgd:
+    git: "https://github.com/libgd/libgd.git"

@@ -9,7 +9,7 @@
 #define GOOSE_CONFIG  "goose.yaml"
 #define GOOSE_LOCK    "goose.lock"
 #define GOOSE_PKG_DIR "packages"
-#define GOOSE_BUILD   "builds"
+#define GOOSE_BUILD   "build"
 
 void usage(void);
 

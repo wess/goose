@@ -13,13 +13,13 @@ void config_default(Config *cfg, const char *name) {
     strncpy(cfg->author, "", MAX_NAME_LEN - 1);
     strncpy(cfg->license, "MIT", 63);
     strncpy(cfg->src_dir, "src", MAX_PATH_LEN - 1);
-    strncpy(cfg->build_dir, GOOSE_BUILD, MAX_PATH_LEN - 1);
     strncpy(cfg->cc, "cc", 63);
     strncpy(cfg->cflags, "-Wall -Wextra -std=c11", 255);
     strncpy(cfg->ldflags, "", 255);
     /* default include: src */
     strncpy(cfg->includes[0], "src", MAX_PATH_LEN - 1);
     cfg->include_count = 1;
+    cfg->source_count = 0;
     cfg->dep_count = 0;
 }
 
@@ -49,6 +49,7 @@ int config_load(const char *path, Config *cfg) {
     int depth = 0;
     int in_includes = 0;
     int parsed_includes = 0;
+    int in_sources = 0;
     Dependency *cur_dep = NULL;
 
     while (1) {
@@ -68,16 +69,19 @@ int config_load(const char *path, Config *cfg) {
         case YAML_SEQUENCE_START_EVENT:
             if (section == S_BUILD && strcmp(key, "includes") == 0) {
                 in_includes = 1;
-                /* clear defaults since user is specifying explicitly */
                 if (!parsed_includes) {
                     cfg->include_count = 0;
                     parsed_includes = 1;
                 }
+            } else if (section == S_BUILD && strcmp(key, "sources") == 0) {
+                in_sources = 1;
+                cfg->source_count = 0;
             }
             break;
 
         case YAML_SEQUENCE_END_EVENT:
             in_includes = 0;
+            in_sources = 0;
             in_key = 0;
             break;
 
@@ -124,6 +128,15 @@ int config_load(const char *path, Config *cfg) {
                 break;
             }
 
+            /* items inside sources sequence */
+            if (in_sources) {
+                if (cfg->source_count < MAX_SRC_FILES) {
+                    strncpy(cfg->sources[cfg->source_count], val, MAX_PATH_LEN - 1);
+                    cfg->source_count++;
+                }
+                break;
+            }
+
             if (!in_key) {
                 strncpy(key, val, 255);
                 key[255] = '\0';
@@ -154,8 +167,7 @@ int config_load(const char *path, Config *cfg) {
                         strncpy(cfg->ldflags, val, 255);
                     else if (strcmp(key, "src_dir") == 0)
                         strncpy(cfg->src_dir, val, MAX_PATH_LEN - 1);
-                    else if (strcmp(key, "build_dir") == 0)
-                        strncpy(cfg->build_dir, val, MAX_PATH_LEN - 1);
+
                 }
                 in_key = 0;
             }
@@ -197,11 +209,14 @@ int config_save(const char *path, const Config *cfg) {
         fprintf(f, "  ldflags: \"%s\"\n", cfg->ldflags);
     if (strcmp(cfg->src_dir, "src") != 0)
         fprintf(f, "  src_dir: \"%s\"\n", cfg->src_dir);
-    if (strcmp(cfg->build_dir, GOOSE_BUILD) != 0)
-        fprintf(f, "  build_dir: \"%s\"\n", cfg->build_dir);
     fprintf(f, "  includes:\n");
     for (int i = 0; i < cfg->include_count; i++)
         fprintf(f, "    - \"%s\"\n", cfg->includes[i]);
+    if (cfg->source_count > 0) {
+        fprintf(f, "  sources:\n");
+        for (int i = 0; i < cfg->source_count; i++)
+            fprintf(f, "    - \"%s\"\n", cfg->sources[i]);
+    }
     fprintf(f, "\n");
 
     fprintf(f, "dependencies:\n");

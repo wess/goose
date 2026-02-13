@@ -62,9 +62,18 @@ int pkg_fetch(const Dependency *dep, const char *pkg_dir, LockFile *lf) {
                     fflush(stdout);
                     checkout_sha(dest, locked);
                 }
-                return 0;
             }
         }
+
+        /* re-convert CMakeLists.txt if present (picks up converter improvements) */
+        char cml[512];
+        snprintf(cml, sizeof(cml), "%s/CMakeLists.txt", dest);
+        if (fs_exists(cml)) {
+            char ycfg[512];
+            snprintf(ycfg, sizeof(ycfg), "%s/%s", dest, GOOSE_CONFIG);
+            cmake_convert_file(cml, ycfg);
+        }
+
         return 0;
     }
 
@@ -95,16 +104,14 @@ int pkg_fetch(const Dependency *dep, const char *pkg_dir, LockFile *lf) {
         lock_update_entry(lf, dep->name, dep->git, sha);
     }
 
-    /* auto-convert CMakeLists.txt if no goose.yaml */
+    /* auto-convert CMakeLists.txt → goose.yaml (always re-convert if cmake exists) */
     char sub_cfg_path[512];
     snprintf(sub_cfg_path, sizeof(sub_cfg_path), "%s/%s", dest, GOOSE_CONFIG);
-    if (!fs_exists(sub_cfg_path)) {
-        char cmake_path[512];
-        snprintf(cmake_path, sizeof(cmake_path), "%s/CMakeLists.txt", dest);
-        if (fs_exists(cmake_path)) {
-            info("Converting", "CMakeLists.txt for %s", dep->name);
-            cmake_convert_file(cmake_path, sub_cfg_path);
-        }
+    char cmake_path[512];
+    snprintf(cmake_path, sizeof(cmake_path), "%s/CMakeLists.txt", dest);
+    if (fs_exists(cmake_path)) {
+        info("Converting", "CMakeLists.txt for %s", dep->name);
+        cmake_convert_file(cmake_path, sub_cfg_path);
     }
 
     /* transitive deps: if package has goose.yaml, fetch its deps */

@@ -63,7 +63,7 @@ int cmd_run(int argc, char **argv) {
 
     char bin[512];
     snprintf(bin, sizeof(bin), "./%s/%s/%s",
-             cfg.build_dir, release ? "release" : "debug", cfg.name);
+             GOOSE_BUILD, release ? "release" : "debug", cfg.name);
 
     info("Running", "%s", bin);
     printf("\n");
@@ -84,12 +84,8 @@ int cmd_run(int argc, char **argv) {
 int cmd_clean(int argc, char **argv) {
     (void)argc; (void)argv;
 
-    Config cfg;
-    if (config_load(GOOSE_CONFIG, &cfg) != 0)
-        return 1;
-
-    info("Cleaning", "%s", cfg.name);
-    return build_clean(&cfg);
+    info("Cleaning", "%s/", GOOSE_BUILD);
+    return build_clean();
 }
 
 int cmd_test(int argc, char **argv) {
@@ -125,10 +121,24 @@ int cmd_test(int argc, char **argv) {
     int src_count = 0;
     fs_collect_sources(cfg.src_dir, src_files, MAX_SRC_FILES, &src_count);
 
-    /* collect package sources */
+    /* collect package sources (prefer explicit sources list) */
     char pkg_files[MAX_SRC_FILES][512];
     int pkg_count = 0;
     for (int i = 0; i < cfg.dep_count; i++) {
+        char pkg_cfg_path[512];
+        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path),
+                 "%s/%s/%s", GOOSE_PKG_DIR, cfg.deps[i].name, GOOSE_CONFIG);
+        if (fs_exists(pkg_cfg_path)) {
+            Config pkg_cfg;
+            if (config_load(pkg_cfg_path, &pkg_cfg) == 0 && pkg_cfg.source_count > 0) {
+                for (int j = 0; j < pkg_cfg.source_count && pkg_count < MAX_SRC_FILES; j++) {
+                    snprintf(pkg_files[pkg_count], 512, "%s/%s/%s",
+                             GOOSE_PKG_DIR, cfg.deps[i].name, pkg_cfg.sources[j]);
+                    pkg_count++;
+                }
+                continue;
+            }
+        }
         char pkg_src[512];
         snprintf(pkg_src, sizeof(pkg_src), "%s/%s/src",
                  GOOSE_PKG_DIR, cfg.deps[i].name);
@@ -155,8 +165,8 @@ int cmd_test(int argc, char **argv) {
         if (dot) *dot = '\0';
 
         char out_dir[512];
-        snprintf(out_dir, sizeof(out_dir), "%s/test", cfg.build_dir);
-        fs_mkdir(cfg.build_dir);
+        snprintf(out_dir, sizeof(out_dir), "%s/test", GOOSE_BUILD);
+        fs_mkdir(GOOSE_BUILD);
         fs_mkdir(out_dir);
 
         char bin[512];
@@ -213,8 +223,19 @@ int cmd_test(int argc, char **argv) {
             off += snprintf(cmd + off, sizeof(cmd) - off, "'%s' ", pkg_files[i]);
 
         off += snprintf(cmd + off, sizeof(cmd) - off, "-o '%s'", bin);
+
+        /* collect ldflags from project and packages */
         if (strlen(cfg.ldflags) > 0)
             off += snprintf(cmd + off, sizeof(cmd) - off, " %s", cfg.ldflags);
+        for (int pi = 0; pi < cfg.dep_count; pi++) {
+            char plp[512];
+            snprintf(plp, sizeof(plp), "%s/%s/%s",
+                     GOOSE_PKG_DIR, cfg.deps[pi].name, GOOSE_CONFIG);
+            if (!fs_exists(plp)) continue;
+            Config pc;
+            if (config_load(plp, &pc) == 0 && strlen(pc.ldflags) > 0)
+                off += snprintf(cmd + off, sizeof(cmd) - off, " %s", pc.ldflags);
+        }
 
         /* compile */
         fflush(stdout);
@@ -271,7 +292,7 @@ int cmd_install(int argc, char **argv) {
         return 1;
 
     char src[512], dest[512];
-    snprintf(src, sizeof(src), "%s/release/%s", cfg.build_dir, cfg.name);
+    snprintf(src, sizeof(src), "%s/release/%s", GOOSE_BUILD, cfg.name);
     snprintf(dest, sizeof(dest), "%s/bin/%s", prefix, cfg.name);
 
     char cmd[1024];

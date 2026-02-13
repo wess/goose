@@ -85,7 +85,7 @@ int cmd_new(int argc, char **argv) {
 
     snprintf(path, sizeof(path), "%s/.gitignore", name);
     fs_write_file(path,
-        "builds/\n"
+        "build/\n"
         "packages/\n"
         "goose.lock\n");
 

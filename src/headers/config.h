@@ -20,12 +20,13 @@ typedef struct {
     char author[MAX_NAME_LEN];
     char license[64];
     char src_dir[MAX_PATH_LEN];
-    char build_dir[MAX_PATH_LEN];
     char cc[64];
     char cflags[256];
     char ldflags[256];
     char includes[MAX_INCLUDES][MAX_PATH_LEN];
     int include_count;
+    char sources[MAX_SRC_FILES][MAX_PATH_LEN];
+    int source_count;
     Dependency deps[MAX_DEPS];
     int dep_count;
 } Config;

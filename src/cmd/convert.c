@@ -16,6 +16,8 @@ int cmd_convert(int argc, char **argv) {
             cmake_path = argv[++i];
         else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc)
             yaml_path = argv[++i];
+        else if (strcmp(argv[i], "--cmake") == 0)
+            continue; /* explicit cmake mode (default behavior) */
         else if (argv[i][0] != '-')
             cmake_path = argv[i];
     }
@@ -44,6 +46,8 @@ int cmd_convert(int argc, char **argv) {
         info("Include", "%s", cfg.includes[i]);
     if (strlen(cfg.ldflags) > 0)
         info("Ldflags", "%s", cfg.ldflags);
+    if (cfg.source_count > 0)
+        info("Sources", "%d files", cfg.source_count);
 
     if (config_save(yaml_path, &cfg) != 0) {
         err("failed to write %s", yaml_path);
