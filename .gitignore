@@ -3,6 +3,7 @@ packages/
 # Created by https://www.toptal.com/developers/gitignore/api/macos,linux,visualstudiocode,vim,cmake,autotools
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,linux,visualstudiocode,vim,cmake,autotools
 
+CLAUDE.md
 
 ### CMake ###
 CMakeLists.txt.user

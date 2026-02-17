@@ -145,6 +145,45 @@ static void build_include_flags(const Config *cfg, char *buf, int bufsz) {
     }
 }
 
+int build_transpile(const Config *cfg) {
+    if (cfg->plugin_count == 0) return 0;
+
+    fs_mkdir(GOOSE_BUILD);
+    char gen_dir[512];
+    snprintf(gen_dir, sizeof(gen_dir), "%s/gen", GOOSE_BUILD);
+    fs_mkdir(gen_dir);
+
+    for (int p = 0; p < cfg->plugin_count; p++) {
+        char plugin_files[MAX_SRC_FILES][512];
+        int file_count = 0;
+        fs_collect_ext(cfg->src_dir, cfg->plugins[p].ext,
+                       plugin_files, MAX_SRC_FILES, &file_count);
+
+        for (int i = 0; i < file_count; i++) {
+            const char *base = strrchr(plugin_files[i], '/');
+            base = base ? base + 1 : plugin_files[i];
+
+            char stem[256];
+            strncpy(stem, base, sizeof(stem) - 1);
+            stem[sizeof(stem) - 1] = '\0';
+            char *dot = strrchr(stem, '.');
+            if (dot) *dot = '\0';
+
+            info("Transpiling", "%s (%s)", base, cfg->plugins[p].name);
+
+            char cmd[2048];
+            snprintf(cmd, sizeof(cmd), "'%s' '%s' > '%s/%s.c'",
+                     cfg->plugins[p].command, plugin_files[i], gen_dir, stem);
+
+            if (system(cmd) != 0) {
+                err("transpile failed: %s", plugin_files[i]);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 int build_project(const Config *cfg, int release) {
     char out_dir[512];
     snprintf(out_dir, sizeof(out_dir), "%s/%s",
@@ -152,9 +191,22 @@ int build_project(const Config *cfg, int release) {
     fs_mkdir(GOOSE_BUILD);
     fs_mkdir(out_dir);
 
+    if (build_transpile(cfg) != 0)
+        return -1;
+
     char src_files[MAX_SRC_FILES][512];
     int src_count = 0;
     fs_collect_sources(cfg->src_dir, src_files, MAX_SRC_FILES, &src_count);
+
+    /* collect generated sources from build/gen/ */
+    char gen_dir[512];
+    snprintf(gen_dir, sizeof(gen_dir), "%s/gen", GOOSE_BUILD);
+    if (fs_exists(gen_dir)) {
+        int gen_count = 0;
+        fs_collect_sources(gen_dir, src_files + src_count,
+                           MAX_SRC_FILES - src_count, &gen_count);
+        src_count += gen_count;
+    }
 
     if (src_count == 0) {
         err("no source files found in %s/", cfg->src_dir);
@@ -167,6 +219,12 @@ int build_project(const Config *cfg, int release) {
 
     char includes[4096];
     build_include_flags(cfg, includes, sizeof(includes));
+
+    /* add generated source include path */
+    if (fs_exists(gen_dir)) {
+        int ioff = (int)strlen(includes);
+        snprintf(includes + ioff, sizeof(includes) - ioff, "-I%s ", gen_dir);
+    }
 
     /* collect package -D defines */
     char pkg_defines[2048] = {0};

@@ -116,10 +116,24 @@ int cmd_test(int argc, char **argv) {
         return 1;
     lock_save(GOOSE_LOCK, &lf);
 
+    if (build_transpile(&cfg) != 0)
+        return 1;
+
     /* collect project sources (excluding main.c) */
     char src_files[MAX_SRC_FILES][512];
     int src_count = 0;
     fs_collect_sources(cfg.src_dir, src_files, MAX_SRC_FILES, &src_count);
+
+    /* collect generated sources from build/gen/ */
+    char gen_dir[512];
+    snprintf(gen_dir, sizeof(gen_dir), "%s/gen", GOOSE_BUILD);
+    int has_gen = fs_exists(gen_dir);
+    if (has_gen) {
+        int gen_count = 0;
+        fs_collect_sources(gen_dir, src_files + src_count,
+                           MAX_SRC_FILES - src_count, &gen_count);
+        src_count += gen_count;
+    }
 
     /* collect package sources (prefer explicit sources list) */
     char pkg_files[MAX_SRC_FILES][512];
@@ -206,6 +220,10 @@ int cmd_test(int argc, char **argv) {
             snprintf(inc, sizeof(inc), "%s/%s", GOOSE_PKG_DIR, cfg.deps[i].name);
             off += snprintf(cmd + off, sizeof(cmd) - off, "-I%s ", inc);
         }
+
+        /* generated source include path */
+        if (has_gen)
+            off += snprintf(cmd + off, sizeof(cmd) - off, "-I%s ", gen_dir);
 
         /* test file itself */
         off += snprintf(cmd + off, sizeof(cmd) - off, "'%s' ", test_files[t]);

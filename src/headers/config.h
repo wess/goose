@@ -13,6 +13,16 @@ typedef struct {
     char version[64];
 } Dependency;
 
+#define MAX_PLUGINS   16
+#define MAX_EXT_LEN   16
+#define MAX_CMD_LEN   256
+
+typedef struct {
+    char name[MAX_NAME_LEN];
+    char ext[MAX_EXT_LEN];
+    char command[MAX_CMD_LEN];
+} Plugin;
+
 typedef struct {
     char name[MAX_NAME_LEN];
     char version[64];
@@ -29,6 +39,8 @@ typedef struct {
     int source_count;
     Dependency deps[MAX_DEPS];
     int dep_count;
+    Plugin plugins[MAX_PLUGINS];
+    int plugin_count;
 } Config;
 
 int  config_load(const char *path, Config *cfg);

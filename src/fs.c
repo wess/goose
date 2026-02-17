@@ -38,10 +38,12 @@ int fs_write_file(const char *path, const char *content) {
     return 0;
 }
 
-static int collect_recursive(const char *dir, char files[][512], int max, int *count) {
+static int collect_recursive_ext(const char *dir, const char *ext,
+                                 char files[][512], int max, int *count) {
     DIR *d = opendir(dir);
     if (!d) return -1;
 
+    size_t ext_len = strlen(ext);
     struct dirent *ent;
     while ((ent = readdir(d)) != NULL && *count < max) {
         if (ent->d_name[0] == '.') continue;
@@ -53,10 +55,11 @@ static int collect_recursive(const char *dir, char files[][512], int max, int *c
         if (stat(full, &st) != 0) continue;
 
         if (S_ISDIR(st.st_mode)) {
-            collect_recursive(full, files, max, count);
+            collect_recursive_ext(full, ext, files, max, count);
         } else {
             size_t len = strlen(ent->d_name);
-            if (len > 2 && strcmp(ent->d_name + len - 2, ".c") == 0) {
+            if (len > ext_len &&
+                strcmp(ent->d_name + len - ext_len, ext) == 0) {
                 strncpy(files[*count], full, 511);
                 files[*count][511] = '\0';
                 (*count)++;
@@ -69,5 +72,11 @@ static int collect_recursive(const char *dir, char files[][512], int max, int *c
 
 int fs_collect_sources(const char *dir, char files[][512], int max, int *count) {
     *count = 0;
-    return collect_recursive(dir, files, max, count);
+    return collect_recursive_ext(dir, ".c", files, max, count);
+}
+
+int fs_collect_ext(const char *dir, const char *ext,
+                   char files[][512], int max, int *count) {
+    *count = 0;
+    return collect_recursive_ext(dir, ext, files, max, count);
 }

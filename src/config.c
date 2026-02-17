@@ -21,12 +21,13 @@ void config_default(Config *cfg, const char *name) {
     cfg->include_count = 1;
     cfg->source_count = 0;
     cfg->dep_count = 0;
+    cfg->plugin_count = 0;
 }
 
 /* --- YAML Loading --- */
 
 typedef enum {
-    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD
+    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD, S_PLUGINS, S_PLUGIN_ENTRY
 } Section;
 
 int config_load(const char *path, Config *cfg) {
@@ -51,6 +52,7 @@ int config_load(const char *path, Config *cfg) {
     int parsed_includes = 0;
     int in_sources = 0;
     Dependency *cur_dep = NULL;
+    Plugin *cur_plugin = NULL;
 
     while (1) {
         if (!yaml_parser_parse(&parser, &event)) {
@@ -94,12 +96,21 @@ int config_load(const char *path, Config *cfg) {
                 section = S_DEPS;
             else if (depth == 2 && strcmp(key, "build") == 0)
                 section = S_BUILD;
+            else if (depth == 2 && strcmp(key, "plugins") == 0)
+                section = S_PLUGINS;
             else if (section == S_DEPS && depth == 3) {
                 section = S_DEP_ENTRY;
                 if (cfg->dep_count < MAX_DEPS) {
                     cur_dep = &cfg->deps[cfg->dep_count];
                     memset(cur_dep, 0, sizeof(Dependency));
                     strncpy(cur_dep->name, key, MAX_NAME_LEN - 1);
+                }
+            } else if (section == S_PLUGINS && depth == 3) {
+                section = S_PLUGIN_ENTRY;
+                if (cfg->plugin_count < MAX_PLUGINS) {
+                    cur_plugin = &cfg->plugins[cfg->plugin_count];
+                    memset(cur_plugin, 0, sizeof(Plugin));
+                    strncpy(cur_plugin->name, key, MAX_NAME_LEN - 1);
                 }
             }
             break;
@@ -112,6 +123,12 @@ int config_load(const char *path, Config *cfg) {
                     cfg->dep_count++;
                 cur_dep = NULL;
                 section = S_DEPS;
+            }
+            if (section == S_PLUGIN_ENTRY && depth == 2) {
+                if (cfg->plugin_count < MAX_PLUGINS)
+                    cfg->plugin_count++;
+                cur_plugin = NULL;
+                section = S_PLUGINS;
             }
             if (depth <= 1) section = S_NONE;
             break;
@@ -158,6 +175,11 @@ int config_load(const char *path, Config *cfg) {
                         strncpy(cur_dep->git, val, MAX_PATH_LEN - 1);
                     else if (strcmp(key, "version") == 0)
                         strncpy(cur_dep->version, val, 63);
+                } else if (section == S_PLUGIN_ENTRY && cur_plugin) {
+                    if (strcmp(key, "ext") == 0)
+                        strncpy(cur_plugin->ext, val, MAX_EXT_LEN - 1);
+                    else if (strcmp(key, "command") == 0)
+                        strncpy(cur_plugin->command, val, MAX_CMD_LEN - 1);
                 } else if (section == S_BUILD) {
                     if (strcmp(key, "cc") == 0)
                         strncpy(cfg->cc, val, 63);
@@ -225,6 +247,15 @@ int config_save(const char *path, const Config *cfg) {
         fprintf(f, "    git: \"%s\"\n", cfg->deps[i].git);
         if (strlen(cfg->deps[i].version) > 0)
             fprintf(f, "    version: \"%s\"\n", cfg->deps[i].version);
+    }
+
+    if (cfg->plugin_count > 0) {
+        fprintf(f, "\nplugins:\n");
+        for (int i = 0; i < cfg->plugin_count; i++) {
+            fprintf(f, "  %s:\n", cfg->plugins[i].name);
+            fprintf(f, "    ext: \"%s\"\n", cfg->plugins[i].ext);
+            fprintf(f, "    command: \"%s\"\n", cfg->plugins[i].command);
+        }
     }
 
     fclose(f);
