@@ -16,4 +16,7 @@ jobs:
         run: make clean && make
 
       - name: Verify binary
-        run: ./goose --version
+        run: ./build/goose --version
+
+      - name: Verify library
+        run: test -f build/libgoose.a

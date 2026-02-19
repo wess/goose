@@ -60,7 +60,13 @@ jobs:
         run: make clean && make
 
       - name: Package
-        run: tar czf ${{ matrix.artifact }}.tar.gz goose
+        run: |
+          mkdir -p staging/bin staging/lib staging/include/goose/headers
+          cp build/goose staging/bin/
+          cp build/libgoose.a staging/lib/
+          cp include/goose.h staging/include/goose/
+          cp src/headers/*.h staging/include/goose/headers/
+          tar czf ${{ matrix.artifact }}.tar.gz -C staging .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

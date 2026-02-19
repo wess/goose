@@ -11,6 +11,4 @@
 #define GOOSE_PKG_DIR "packages"
 #define GOOSE_BUILD   "build"
 
-void usage(void);
-
 #endif

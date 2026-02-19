@@ -25,7 +25,7 @@ static Command commands[] = {
     {NULL, NULL, NULL}
 };
 
-void usage(void) {
+static void usage(void) {
     cprintf(CLR_GREEN, "goose %s", GOOSE_VERSION);
     printf(" - A package manager for C\n\n");
     printf("Usage: goose <command> [options]\n\n");
