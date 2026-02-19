@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="wess/goose"
+version="${ASDF_INSTALL_VERSION}"
+
+get_platform() {
+  local os arch suffix
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+
+  case "${os}" in
+    linux)  os="linux" ;;
+    darwin) os="darwin" ;;
+    *)      echo "Unsupported OS: ${os}" >&2; exit 1 ;;
+  esac
+
+  case "${arch}" in
+    x86_64|amd64)  arch="amd64" ;;
+    aarch64|arm64) arch="arm64" ;;
+    *)             echo "Unsupported architecture: ${arch}" >&2; exit 1 ;;
+  esac
+
+  suffix=""
+  if [ "${os}" = "linux" ] && [ "${arch}" = "amd64" ]; then
+    suffix="-static"
+  fi
+
+  echo "${os}-${arch}${suffix}"
+}
+
+platform="$(get_platform)"
+tarball="goose-${version}-${platform}.tar.gz"
+url="https://github.com/${repo}/releases/download/v${version}/${tarball}"
+
+echo "Downloading goose ${version} for ${platform}..."
+
+mkdir -p "${ASDF_DOWNLOAD_PATH}"
+
+curl -fsSL "${url}" -o "${ASDF_DOWNLOAD_PATH}/${tarball}" || {
+  echo "Failed to download ${url}" >&2
+  exit 1
+}
+
+tar -xzf "${ASDF_DOWNLOAD_PATH}/${tarball}" -C "${ASDF_DOWNLOAD_PATH}" || {
+  echo "Failed to extract tarball" >&2
+  exit 1
+}
+
+rm -f "${ASDF_DOWNLOAD_PATH}/${tarball}"

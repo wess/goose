@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${ASDF_INSTALL_TYPE}" != "version" ]; then
+  echo "goose asdf plugin only supports release versions" >&2
+  exit 1
+fi
+
+(
+  mkdir -p "${ASDF_INSTALL_PATH}/bin"
+  mkdir -p "${ASDF_INSTALL_PATH}/lib"
+  mkdir -p "${ASDF_INSTALL_PATH}/include"
+
+  cp -r "${ASDF_DOWNLOAD_PATH}/bin/"* "${ASDF_INSTALL_PATH}/bin/"
+  cp -r "${ASDF_DOWNLOAD_PATH}/lib/"* "${ASDF_INSTALL_PATH}/lib/"
+  cp -r "${ASDF_DOWNLOAD_PATH}/include/"* "${ASDF_INSTALL_PATH}/include/"
+
+  chmod +x "${ASDF_INSTALL_PATH}/bin/goose"
+) || {
+  rm -rf "${ASDF_INSTALL_PATH}"
+  echo "Failed to install goose ${ASDF_INSTALL_VERSION}" >&2
+  exit 1
+}

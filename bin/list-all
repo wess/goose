@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="wess/goose"
+
+if [ -n "${GITHUB_API_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+  token="${GITHUB_API_TOKEN:-${GITHUB_TOKEN:-}}"
+  versions=$(
+    curl -fsS -H "Authorization: token ${token}" \
+      "https://api.github.com/repos/${repo}/releases" |
+    grep -oE '"tag_name":\s*"v?[^"]+"' |
+    sed 's/"tag_name": *"v\{0,1\}//;s/"//' |
+    sort -V
+  )
+else
+  versions=$(
+    git ls-remote --tags --refs "https://github.com/${repo}.git" |
+    awk '{print $2}' |
+    sed 's|refs/tags/v||' |
+    sort -V
+  )
+fi
+
+echo "${versions}" | tr '\n' ' '
