@@ -22,21 +22,36 @@ Goose handles project scaffolding, dependency management, building, testing, and
 
 ## Install
 
-**One-liner:**
+**Homebrew (macOS):**
+
+```sh
+brew tap wess/goose
+brew install goose
+```
+
+**Shell script:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
 ```
 
-**Custom install directory:**
+Custom install directory:
 
 ```sh
-GOOSE_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
+GOOSE_INSTALL_DIR=~/.local curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
 ```
 
-**Manual download:**
+**asdf:**
 
-Pre-built packages for each release are available on the [Releases](https://github.com/wess/goose/releases) page. Each tarball contains the `goose` binary, `libgoose.a` static library, and header files. Packages are available as `.tar.gz`, `.deb`, `.rpm`, and Arch Linux `PKGBUILD`. Download and extract for your platform, or use the platform-specific package.
+```sh
+asdf plugin add goose https://github.com/wess/goose.git
+asdf install goose latest
+asdf global goose latest
+```
+
+**Package managers:**
+
+Pre-built packages for each release are available on the [Releases](https://github.com/wess/goose/releases) page, including `.tar.gz`, `.deb`, `.rpm`, and Arch Linux `PKGBUILD`.
 
 **Build from source:**
 
@@ -44,14 +59,9 @@ Pre-built packages for each release are available on the [Releases](https://gith
 git clone https://github.com/wess/goose.git
 cd goose
 make
-make install                  # installs binary, library, and headers
+make install                  # installs to /usr/local
 make install PREFIX=~/.local  # custom prefix
 ```
-
-This installs:
-- `goose` binary to `PREFIX/bin/`
-- `libgoose.a` static library to `PREFIX/lib/`
-- Headers to `PREFIX/include/goose/`
 
 ## Quick Start
 

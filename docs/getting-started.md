@@ -2,10 +2,31 @@
 
 ## Installation
 
-**One-liner:**
+**Homebrew (macOS):**
+
+```sh
+brew tap wess/goose
+brew install goose
+```
+
+**Shell script:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
+```
+
+Custom install directory:
+
+```sh
+GOOSE_INSTALL_DIR=~/.local curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
+```
+
+**asdf:**
+
+```sh
+asdf plugin add goose https://github.com/wess/goose.git
+asdf install goose latest
+asdf global goose latest
 ```
 
 **Build from source:**
@@ -14,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
 git clone https://github.com/wess/goose.git
 cd goose
 make
-make install  # installs binary, library, and headers to /usr/local
+make install  # installs to /usr/local
 ```
 
 To install to a custom location:
