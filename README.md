@@ -14,9 +14,11 @@ Goose handles project scaffolding, dependency management, building, testing, and
 - **Lock file** -- `goose.lock` pins exact commits for reproducible builds
 - **Transitive dependencies** -- Packages can depend on other packages
 - **Task runner** -- Define and run named shell commands from `goose.yaml`
-- **Plugin system** -- Transpile non-C source files before compilation
 - **Test runner** -- Discovers and runs test files from `tests/`
+- **Plugin system** -- Custom transpilers for `.l`, `.y`, or any file extension
+- **CMake conversion** -- Auto-converts `CMakeLists.txt` packages to `goose.yaml`
 - **Install command** -- Build and install binaries to your system
+- **Library mode** -- Use goose as a static library (`libgoose.a`) to build your own tools
 
 ## Install
 
@@ -42,9 +44,14 @@ Pre-built packages for each release are available on the [Releases](https://gith
 git clone https://github.com/wess/goose.git
 cd goose
 make
-make install                  # /usr/local/bin/goose
+make install                  # installs binary, library, and headers
 make install PREFIX=~/.local  # custom prefix
 ```
+
+This installs:
+- `goose` binary to `PREFIX/bin/`
+- `libgoose.a` static library to `PREFIX/lib/`
+- Headers to `PREFIX/include/goose/`
 
 ## Quick Start
 
@@ -63,8 +70,8 @@ Output:
      Created new goose project 'myapp'
     Building myapp v0.1.0 (debug)
    Compiling myapp (debug)
-    Finished builds/debug/myapp
-     Running ./builds/debug/myapp
+    Finished build/debug/myapp
+     Running ./build/debug/myapp
 
 Hello from myapp!
 ```
@@ -83,7 +90,7 @@ Hello from myapp!
 | `goose remove <name>` | Remove a dependency |
 | `goose update` | Update all dependencies |
 | `goose install [--prefix]` | Install binary to system |
-| `goose convert` | Convert CMakeLists.txt to goose.yaml |
+| `goose convert [file]` | Convert CMakeLists.txt to goose.yaml |
 | `goose task [name]` | List or run a project task |
 
 ## Configuration
@@ -115,6 +122,11 @@ dependencies:
     version: "v1.0.0"
   locallib:
     path: "libs/locallib"
+
+plugins:
+  lex:
+    ext: ".l"
+    command: "flex"
 
 tasks:
   demo: "./build/debug/myapp examples/demo.txt"
@@ -306,6 +318,24 @@ goose add https://github.com/you/mylib.git
 
 See the [examples/](examples/) directory for complete working packages.
 
+## Plugins
+
+Goose supports custom transpilers that run before compilation. Define plugins in `goose.yaml` with a file extension and a command:
+
+```yaml
+plugins:
+  lex:
+    ext: ".l"
+    command: "flex"
+  yacc:
+    ext: ".y"
+    command: "bison -d"
+```
+
+During `goose build`, files matching each extension are found in `src/` and run through the command. Output `.c` files are placed in `build/gen/` and compiled into the final binary.
+
+See [Plugins](docs/plugins.md) for details.
+
 ## Project Structure
 
 ```
@@ -365,6 +395,20 @@ make install PREFIX=~/.local
 #   ~/.local/include/goose/goose.h
 #   ~/.local/include/goose/headers/*.h
 ```
+
+See [Using libgoose.a](docs/library.md) for a full tutorial.
+
+## Documentation
+
+Full documentation is in the [docs/](docs/) directory:
+
+- [Getting Started](docs/getting-started.md)
+- [Configuration Reference](docs/configuration.md)
+- [Dependencies](docs/dependencies.md)
+- [Creating Packages](docs/creating-packages.md)
+- [Command Reference](docs/commands.md)
+- [Plugins](docs/plugins.md)
+- [Using libgoose.a](docs/library.md)
 
 ## License
 

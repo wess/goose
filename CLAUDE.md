@@ -10,9 +10,9 @@ Goose — a Cargo-inspired package manager and build tool for C. Uses `goose.yam
 src/
   main.c              — entry point, CLI command dispatch table
   config.c            — YAML parsing/writing of goose.yaml (uses libyaml)
-  build.c             — compilation: source collection, include/define/ldflag aggregation, cc invocation
+  build.c             — compilation: source collection, plugin transpilation, include/define/ldflag aggregation, cc invocation
   pkg.c               — package ops: git clone/pull/remove, transitive dep resolution, lock sync
-  fs.c                — filesystem helpers: mkdir, exists, rmrf, write_file, recursive .c collection
+  fs.c                — filesystem helpers: mkdir, exists, rmrf, write_file, recursive .c/.ext collection
   lock.c              — goose.lock read/write/lookup (TOML-like [[package]] format)
   cmake.c             — CMakeLists.txt to goose.yaml converter (variable table, if/else, subdirectories)
   cmd/
@@ -23,35 +23,43 @@ src/
     task.c            — goose task (list/run named tasks from goose.yaml)
   headers/
     main.h            — version macro, path constants (GOOSE_CONFIG, GOOSE_LOCK, GOOSE_PKG_DIR, GOOSE_BUILD)
-    config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_TASKS=32)
-    build.h           — build_project(), build_clean(), build_transpile()
-    pkg.h             — pkg_fetch(), pkg_remove(), pkg_fetch_all(), pkg_update_all(), pkg_name_from_git()
-    fs.h              — fs_mkdir(), fs_exists(), fs_rmrf(), fs_write_file(), fs_collect_sources()
+    config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_PLUGINS=16, MAX_TASKS=32)
+    build.h           — build_project(), build_transpile(), build_clean()
+    pkg.h             — pkg_fetch(), pkg_remove(), pkg_fetch_all(), pkg_update_all(), pkg_name_from_git(), pkg_get_sha()
+    fs.h              — fs_mkdir(), fs_exists(), fs_rmrf(), fs_write_file(), fs_collect_sources(), fs_collect_ext()
     lock.h            — LockFile/LockEntry structs, lock_load/save/find_sha/update_entry
     cmake.h           — cmake_to_config(), cmake_convert_file()
     color.h           — ANSI color macros, info()/warn()/err() logging macros, TTY detection
     cmd.h             — all cmd_* function declarations
+include/
+  goose.h             — public library header, re-exports all internal headers for libgoose.a consumers
 libs/libyaml/         — vendored libyaml 0.2.5 (compiled from source, no system dependency needed)
 examples/             — example projects (mathapp, mathlib, stringlib, gdexample)
+docs/                 — user-facing documentation (getting-started, commands, configuration, dependencies, creating-packages)
 ```
 
 ## Build
 
 ```
-make                  # builds build/goose, compiles libyaml from libs/
+make                  # builds both build/libgoose.a and build/goose
+make lib              # builds only build/libgoose.a (static library)
+make cli              # builds only build/goose (CLI binary)
 make clean            # removes build/
 ```
 
 libyaml is vendored in `libs/libyaml/` and compiled directly — no system install required. The Makefile compiles all `src/*.c` and `src/cmd/*.c` with `-std=c11 -Wall -Wextra`. Version is injected via `-DGOOSE_VERSION_FROM_FILE` from the `VERSION` file.
 
-Object files go to `build/obj/` and `build/obj/cmd/`.
+The CLI binary links against `libgoose.a`. Object files go to `build/obj/` and `build/obj/cmd/`.
 
 ## Install
 
 ```
-make install                  # installs to /usr/local/bin
+make install                  # installs binary, library, and headers to /usr/local
 make install PREFIX=~/.local  # custom prefix
+make uninstall                # removes installed files
 ```
+
+Installs: `PREFIX/bin/goose`, `PREFIX/lib/libgoose.a`, `PREFIX/include/goose/goose.h`, `PREFIX/include/goose/headers/*.h`.
 
 ## Commands
 
@@ -98,12 +106,15 @@ dependencies:
   locallib:
     path: "libs/locallib"  # local path dependency (skips git ops)
 
-plugins:
-  moxy:
-    ext: ".mxy"
-    command: "./build/debug/moxy"
+plugins:                 # optional, custom transpilers/code generators
+  lex:
+    ext: ".l"
+    command: "flex"
+  yacc:
+    ext: ".y"
+    command: "bison -d"
 
-tasks:
+tasks:                   # optional, named shell commands
   demo: "./build/debug/myapp run examples/demo.txt"
   lint: "./build/debug/myapp --lint"
 ```
@@ -128,6 +139,8 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 
 **Test runner**: Compiles each `.c` file in `tests/` as a standalone binary, linking against project sources (minus `main.c`) and package sources. Reports PASS/FAIL per test file.
 
+**Library mode**: All source files (except `main.c`) are compiled into `libgoose.a`. Users can `#include <goose/goose.h>` and link against the static library to call `config_load()`, `pkg_fetch()`, `build_project()`, etc. directly.
+
 ## Code Conventions
 
 - Pure C11, no C++ or external dependencies beyond libyaml (vendored)
@@ -139,6 +152,6 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 
 ## CI/CD
 
-- `.github/workflows/ci.yml`: builds on push/PR to main, runs `make clean && make`, verifies binary
+- `.github/workflows/ci.yml`: builds on push/PR to main, runs `make clean && make`, verifies binary and `libgoose.a`
 - `.github/workflows/release.yml`: triggered by `VERSION` file changes on main. 5 build targets: linux-amd64, linux-arm64, linux-amd64-static (musl), darwin-amd64, darwin-arm64. Packages .deb (amd64+arm64), .rpm, Arch PKGBUILD. Each tarball includes binary + libgoose.a + headers. Generates install.sh and SHA256 checksums. Creates GitHub release with all assets.
 - `install.sh`: curl-based installer that downloads latest release, installs binary + library + headers. Prefers static build on linux amd64. Supports `GOOSE_INSTALL_DIR` for custom prefix.

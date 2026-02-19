@@ -31,10 +31,10 @@ goose build -r           # shorthand for --release
 ```
 
 Output:
-- Debug: `builds/debug/<name>` (compiled with `-g -DDEBUG`)
-- Release: `builds/release/<name>` (compiled with `-O2 -DNDEBUG`)
+- Debug: `build/debug/<name>` (compiled with `-g -DDEBUG`)
+- Release: `build/release/<name>` (compiled with `-O2 -DNDEBUG`)
 
-Before compiling, goose fetches any missing dependencies and updates `goose.lock`.
+Before compiling, goose fetches any missing dependencies and updates `goose.lock`. If plugins are configured, matching source files are transpiled before compilation (see [Plugins](plugins.md)).
 
 ## goose run
 
@@ -75,7 +75,7 @@ Remove all build artifacts.
 goose clean
 ```
 
-Deletes the `builds/` directory.
+Deletes the `build/` directory.
 
 ## goose add
 
@@ -135,9 +135,31 @@ goose convert --output pkg.yaml        # specify output file
 
 This is useful for importing existing CMake-based C libraries into the goose ecosystem. The converter extracts project name, version, include directories, source directories, and linker flags from common CMake commands.
 
-Supported CMake commands: `project()`, `set()`, `add_library()`, `add_executable()`, `include_directories()`, `target_include_directories()`, `target_link_libraries()`, `file(GLOB ...)`, `add_subdirectory()`, and `find_package()`.
+Supported CMake commands: `project()`, `set()`, `list(APPEND)`, `option()`, `add_library()`, `add_executable()`, `include_directories()`, `target_include_directories()`, `target_link_libraries()`, `file(GLOB)`, `add_subdirectory()`, `CHECK_INCLUDE_FILE()`, and `if()/elseif()/else()/endif()` with variable expansion.
 
 Note: This is a best-effort conversion. Complex CMake projects may require manual adjustment of the generated `goose.yaml`.
+
+## goose task
+
+List or run named tasks defined in `goose.yaml`.
+
+```sh
+goose task               # list all available tasks
+goose task <name>        # run a named task
+goose <name>             # shorthand: unknown commands fall back to task lookup
+```
+
+Tasks are simple key-value pairs in `goose.yaml`:
+
+```yaml
+tasks:
+  demo: "./build/debug/myapp examples/demo.txt"
+  lint: "./build/debug/myapp --lint src/"
+```
+
+`goose task` with no arguments prints all available tasks and their commands. With a name, it runs the command via `system()` and returns its exit code.
+
+Unknown commands (not a built-in like `build`, `run`, etc.) automatically fall back to task lookup, so `goose demo` is equivalent to `goose task demo`.
 
 ## Global Options
 

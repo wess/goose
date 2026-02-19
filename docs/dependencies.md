@@ -44,13 +44,35 @@ goose remove mylib
 
 This removes the package from `packages/`, removes the entry from `goose.yaml`.
 
+## Path Dependencies
+
+For local development or monorepo setups, use `path:` instead of `git:` directly in `goose.yaml`:
+
+```yaml
+dependencies:
+  mylib:
+    path: "libs/mylib"
+```
+
+Path dependencies:
+- Skip all git operations (clone, pull, lock)
+- Read the dependency's `goose.yaml` from the specified path
+- Resolve transitive dependencies from the local path
+- Are not tracked in `goose.lock`
+- Are skipped by `goose update`
+
+This is useful for:
+- Working on a library and its consumer simultaneously
+- Embedding a library as a git submodule
+- Monorepo layouts with multiple packages
+
 ## Updating Dependencies
 
 ```sh
 goose update
 ```
 
-This pulls the latest changes for all dependencies and updates `goose.lock` with new commit SHAs.
+This pulls the latest changes for all git dependencies and updates `goose.lock` with new commit SHAs. Path dependencies are skipped.
 
 ## The Lock File
 
@@ -65,7 +87,7 @@ git = "https://github.com/user/mylib.git"
 sha = "a1b2c3d4e5f6..."
 ```
 
-When `goose.lock` exists, `goose build` will ensure each package is checked out to the locked commit. This guarantees reproducible builds.
+When `goose.lock` exists, `goose build` will ensure each git package is checked out to the locked commit. This guarantees reproducible builds. Path dependencies are not tracked in the lock file.
 
 **For applications:** Commit `goose.lock` to version control so all developers build with identical dependencies.
 
@@ -73,7 +95,7 @@ When `goose.lock` exists, `goose build` will ensure each package is checked out 
 
 ## Transitive Dependencies
 
-If a package has its own `goose.yaml` with dependencies, goose fetches those automatically. All transitive dependencies are placed in your project's `packages/` directory.
+If a package has its own `goose.yaml` with dependencies, goose fetches those automatically. Git transitive dependencies are placed in your project's `packages/` directory. Path dependencies resolve transitive deps from the local path.
 
 ```
 myapp/

@@ -2,19 +2,31 @@
 
 ## Installation
 
-Clone the repository and build from source:
+**One-liner:**
 
 ```sh
-git clone https://github.com/youruser/goose.git
+curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
+```
+
+**Build from source:**
+
+```sh
+git clone https://github.com/wess/goose.git
 cd goose
 make
-make install  # installs to /usr/local/bin
+make install  # installs binary, library, and headers to /usr/local
 ```
 
 To install to a custom location:
 
 ```sh
 make install PREFIX=~/.local
+```
+
+To uninstall:
+
+```sh
+make uninstall
 ```
 
 ## Creating Your First Project
@@ -37,8 +49,8 @@ hello/
 ## Building and Running
 
 ```sh
-goose build        # debug build  -> builds/debug/hello
-goose build -r     # release build -> builds/release/hello
+goose build        # debug build  -> build/debug/hello
+goose build -r     # release build -> build/release/hello
 goose run          # build + run (debug)
 goose run -r       # build + run (release)
 ```
@@ -66,7 +78,7 @@ dependencies:
 
 ## Adding a Dependency
 
-Dependencies are git repositories:
+Dependencies are git repositories or local paths:
 
 ```sh
 goose add https://github.com/user/somelib.git
@@ -111,7 +123,7 @@ goose test
 ## Cleaning Up
 
 ```sh
-goose clean  # removes builds/ directory
+goose clean  # removes build/ directory
 ```
 
 ## Next Steps
@@ -119,4 +131,6 @@ goose clean  # removes builds/ directory
 - Read the [Configuration Reference](configuration.md) for all goose.yaml options
 - Read [Dependencies](dependencies.md) to learn about package management
 - Read [Creating Packages](creating-packages.md) to publish your own library
+- Read [Plugins](plugins.md) to use custom transpilers (flex, bison, etc.)
+- Read [Using libgoose.a](library.md) to embed goose in your own tools
 - See the [examples/](../examples/) directory for working examples
