@@ -7,11 +7,14 @@ Goose handles project scaffolding, dependency management, building, testing, and
 ## Features
 
 - **Project scaffolding** -- `goose new` creates a ready-to-build project
-- **Dependency management** -- Add packages from any git repository
+- **Dependency management** -- Add packages from any git repository or local path
+- **Path dependencies** -- Use `path:` for local packages (like Cargo's `path = "..."`)
 - **Automatic builds** -- Discovers `.c` files, resolves include paths, compiles and links
 - **Debug and release modes** -- `-g` by default, `-O2` with `--release`
 - **Lock file** -- `goose.lock` pins exact commits for reproducible builds
 - **Transitive dependencies** -- Packages can depend on other packages
+- **Task runner** -- Define and run named shell commands from `goose.yaml`
+- **Plugin system** -- Transpile non-C source files before compilation
 - **Test runner** -- Discovers and runs test files from `tests/`
 - **Install command** -- Build and install binaries to your system
 
@@ -31,7 +34,7 @@ GOOSE_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/wess
 
 **Manual download:**
 
-Pre-built binaries for each release are available on the [Releases](https://github.com/wess/goose/releases) page. Download the tarball for your platform, extract it, and place the `goose` binary on your `PATH`.
+Pre-built packages for each release are available on the [Releases](https://github.com/wess/goose/releases) page. Each tarball contains the `goose` binary, `libgoose.a` static library, and header files. Packages are available as `.tar.gz`, `.deb`, `.rpm`, and Arch Linux `PKGBUILD`. Download and extract for your platform, or use the platform-specific package.
 
 **Build from source:**
 
@@ -80,6 +83,8 @@ Hello from myapp!
 | `goose remove <name>` | Remove a dependency |
 | `goose update` | Update all dependencies |
 | `goose install [--prefix]` | Install binary to system |
+| `goose convert` | Convert CMakeLists.txt to goose.yaml |
+| `goose task [name]` | List or run a project task |
 
 ## Configuration
 
@@ -100,11 +105,20 @@ build:
   includes:
     - "src"
     - "include"
+  sources:             # optional: explicit source list (overrides auto-discovery)
+    - "src/main.c"
+    - "src/util.c"
 
 dependencies:
   mathlib:
     git: "https://github.com/user/mathlib.git"
     version: "v1.0.0"
+  locallib:
+    path: "libs/locallib"
+
+tasks:
+  demo: "./build/debug/myapp examples/demo.txt"
+  check: "./build/debug/myapp --lint"
 ```
 
 ### Build Section
@@ -115,22 +129,22 @@ dependencies:
 | `cflags` | `-Wall -Wextra -std=c11` | Compiler flags |
 | `ldflags` | (none) | Linker flags |
 | `src_dir` | `src` | Source directory |
-| `build_dir` | `builds` | Output directory |
 | `includes` | `["src"]` | Include directories (become `-I` flags) |
+| `sources` | (auto) | Explicit source file list (optional, overrides auto-discovery) |
 
 ### Build Modes
 
 ```sh
-goose build           # Debug:   -g -DDEBUG    -> builds/debug/myapp
-goose build --release # Release: -O2 -DNDEBUG  -> builds/release/myapp
+goose build           # Debug:   -g -DDEBUG    -> build/debug/myapp
+goose build --release # Release: -O2 -DNDEBUG  -> build/release/myapp
 ```
 
 ## Dependencies
 
-Dependencies are git repositories. Goose clones them into `packages/` and automatically compiles their `.c` files and sets up include paths.
+Dependencies can be git repositories or local paths. Git dependencies are cloned into `packages/` while path dependencies reference a local directory directly.
 
 ```sh
-# Add a dependency
+# Add a git dependency
 goose add https://github.com/user/mylib.git
 
 # Add with a specific version tag
@@ -142,9 +156,25 @@ goose add https://github.com/user/repo.git --name mylib
 # Remove a dependency
 goose remove mylib
 
-# Update all to latest
+# Update all git dependencies to latest
 goose update
 ```
+
+### Path Dependencies
+
+For local development or monorepo setups, use `path:` instead of `git:`:
+
+```yaml
+dependencies:
+  mylib:
+    path: "libs/mylib"
+```
+
+Path dependencies skip all git operations (clone, pull, lock). Goose reads the dependency's `goose.yaml` from the specified path and resolves its transitive dependencies. This is useful for:
+
+- Working on a library and its consumer simultaneously
+- Embedding a library as a git submodule
+- Monorepo layouts with multiple packages
 
 ### Include Paths
 
@@ -176,11 +206,35 @@ git = "https://github.com/user/mathlib.git"
 sha = "a1b2c3d4e5f6..."
 ```
 
-Commit this file for applications. When present, `goose build` ensures dependencies match the locked commits.
+Commit this file for applications. When present, `goose build` ensures dependencies match the locked commits. Path dependencies are not tracked in the lock file.
 
 ### Transitive Dependencies
 
-If a package has its own `goose.yaml` with dependencies, goose fetches them recursively. All packages land in your project's `packages/` directory.
+If a package has its own `goose.yaml` with dependencies, goose fetches them recursively. All git packages land in your project's `packages/` directory. Path dependencies resolve transitive deps from the local path.
+
+## Tasks
+
+Define named shell commands in `goose.yaml` and run them with `goose task`:
+
+```yaml
+tasks:
+  demo: "./build/debug/myapp run examples/demo.txt"
+  lint: "./build/debug/myapp --lint src/"
+  bench: "hyperfine './build/release/myapp input.txt'"
+```
+
+```sh
+# List all tasks
+goose task
+
+# Run a specific task
+goose task demo
+
+# Shorthand: unknown commands fall back to task lookup
+goose demo
+```
+
+Tasks are simple key-value pairs where the key is the task name and the value is the shell command to execute.
 
 ## Testing
 
@@ -262,12 +316,12 @@ myapp/
     main.c
   tests/               # test files (optional)
     test_math.c
-  builds/              # compiled binaries (auto-generated)
+  build/               # compiled output (auto-generated)
     debug/
       myapp
     release/
       myapp
-  packages/            # downloaded dependencies (auto-generated)
+  packages/            # downloaded git dependencies (auto-generated)
     mathlib/
     stringlib/
   .gitignore
@@ -281,15 +335,36 @@ The `examples/` directory contains:
 - **`stringlib/`** -- A string utility library with trim, upper/lower, starts/ends with
 - **`mathapp/`** -- An application that depends on both libraries, with tests
 
-## Documentation
+## Using Goose as a Library
 
-Full documentation is in the [docs/](docs/) directory:
+Goose can also be used as a C library. The build produces `libgoose.a` and installs headers to `include/goose/`.
 
-- [Getting Started](docs/getting-started.md)
-- [Configuration Reference](docs/configuration.md)
-- [Dependencies](docs/dependencies.md)
-- [Creating Packages](docs/creating-packages.md)
-- [Command Reference](docs/commands.md)
+```c
+#include <goose/goose.h>
+
+Config cfg;
+config_load("goose.yaml", &cfg);
+build_project(&cfg, 0);  // 0 = debug, 1 = release
+```
+
+To depend on goose as a library from another goose project:
+
+```yaml
+dependencies:
+  goose:
+    path: "libs/goose"
+```
+
+The `make install` target installs the binary, static library, and headers:
+
+```sh
+make install PREFIX=~/.local
+# installs:
+#   ~/.local/bin/goose
+#   ~/.local/lib/libgoose.a
+#   ~/.local/include/goose/goose.h
+#   ~/.local/include/goose/headers/*.h
+```
 
 ## License
 

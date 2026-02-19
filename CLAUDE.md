@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Goose — a Cargo-inspired package manager and build tool for C. Uses `goose.yaml` for project configuration, `goose.lock` for reproducible dependency pinning, and git URLs for package sources. Version is read from the `VERSION` file at build time.
+Goose — a Cargo-inspired package manager and build tool for C. Uses `goose.yaml` for project configuration, `goose.lock` for reproducible dependency pinning, git URLs or local paths for package sources, and named tasks for shell commands. Also builds as a static library (`libgoose.a`) for embedding into other tools. Version is read from the `VERSION` file at build time.
 
 ## Project Structure
 
@@ -20,10 +20,11 @@ src/
     build.c           — goose build, goose run, goose clean, goose test, goose install
     pkg.c             — goose add, goose remove, goose update
     convert.c         — goose convert (CMake to goose.yaml)
+    task.c            — goose task (list/run named tasks from goose.yaml)
   headers/
     main.h            — version macro, path constants (GOOSE_CONFIG, GOOSE_LOCK, GOOSE_PKG_DIR, GOOSE_BUILD)
-    config.h          — Config/Dependency structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32)
-    build.h           — build_project(), build_clean()
+    config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_TASKS=32)
+    build.h           — build_project(), build_clean(), build_transpile()
     pkg.h             — pkg_fetch(), pkg_remove(), pkg_fetch_all(), pkg_update_all(), pkg_name_from_git()
     fs.h              — fs_mkdir(), fs_exists(), fs_rmrf(), fs_write_file(), fs_collect_sources()
     lock.h            — LockFile/LockEntry structs, lock_load/save/find_sha/update_entry
@@ -63,9 +64,11 @@ goose test [--release|-r]         # compile+run each .c in tests/ (excludes main
 goose clean                       # rm -rf build/
 goose add <git-url> [--name N] [--version TAG]  # add dependency, fetch, update goose.yaml + goose.lock
 goose remove <name>               # remove from goose.yaml + delete from packages/
-goose update                      # git pull all deps, update goose.lock SHAs
+goose update                      # git pull all deps, update goose.lock SHAs (skips path deps)
 goose install [--prefix PATH]     # release build + install binary to prefix/bin/
 goose convert [FILE] [--input F] [--output F]   # convert CMakeLists.txt to goose.yaml
+goose task [name]                 # list tasks (no arg) or run named task from goose.yaml
+goose <taskname>                  # shorthand: unknown commands fall back to task lookup
 ```
 
 ## goose.yaml Schema
@@ -85,13 +88,24 @@ build:
   src_dir: "src"         # optional, omitted if "src"
   includes:
     - "src"
-  sources:               # optional, explicit source file list (used by cmake converter)
+  sources:               # optional, explicit source file list (overrides auto-discovery)
     - "src/foo.c"
 
 dependencies:
   libname:
     git: "https://github.com/user/repo.git"
     version: "v1.0"     # optional git tag/branch
+  locallib:
+    path: "libs/locallib"  # local path dependency (skips git ops)
+
+plugins:
+  moxy:
+    ext: ".mxy"
+    command: "./build/debug/moxy"
+
+tasks:
+  demo: "./build/debug/myapp run examples/demo.txt"
+  lint: "./build/debug/myapp --lint"
 ```
 
 ## goose.lock Format
@@ -100,9 +114,15 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 
 ## Key Architecture Details
 
-**Dependency resolution**: `pkg_fetch()` clones with `--depth 1`. If the package has a `goose.yaml` with deps, it recursively fetches transitive dependencies. If a package only has `CMakeLists.txt`, it auto-converts to `goose.yaml` via `cmake_convert_file()`. Lock file SHAs are checked on every build — if current HEAD differs from locked SHA, it checks out the locked revision.
+**Dependency resolution**: `pkg_fetch()` clones git deps with `--depth 1`. Path deps (`dep->path[0]` set) skip all git operations — goose validates the path exists and resolves transitive deps from the local `goose.yaml`. If a git package has a `goose.yaml` with deps, it recursively fetches transitive dependencies. If a package only has `CMakeLists.txt`, it auto-converts to `goose.yaml` via `cmake_convert_file()`. Lock file SHAs are checked on every build — if current HEAD differs from locked SHA, it checks out the locked revision. `pkg_update_all()` skips path deps.
 
-**Build pipeline**: `build_project()` collects project sources from `src_dir`, package sources (prefers explicit `sources` list from package `goose.yaml`, falls back to recursive `.c` collection), assembles include flags from both project and package configs, collects `-D` defines and ldflags from package cflags, then invokes `cc` as a single compilation command. Debug builds use `-g -DDEBUG`, release uses `-O2 -DNDEBUG`. Output goes to `build/debug/` or `build/release/`.
+**Path dependency resolution**: `dep_base()` helper in `build.c` returns `dep->path` for path deps or `GOOSE_PKG_DIR/dep->name` for git deps. All source/include/ldflag/define collection functions use `dep_base()` to resolve the correct base directory.
+
+**Build pipeline**: `build_project()` runs `build_transpile()` first (processes plugins), then collects project sources from `src_dir`, generated sources from `build/gen/`, and package sources (prefers explicit `sources` list from package `goose.yaml`, falls back to recursive `.c` collection). Assembles include flags from both project and package configs, collects `-D` defines and ldflags from package cflags, then invokes `cc` as a single compilation command. Debug builds use `-g -DDEBUG`, release uses `-O2 -DNDEBUG`. Output goes to `build/debug/` or `build/release/`.
+
+**Plugin/transpile system**: `build_transpile()` iterates plugins defined in `goose.yaml`, collects files matching each plugin's `ext`, and runs the plugin `command` on each file, writing output to `build/gen/`. Generated `.c` files are included in the main compilation.
+
+**Task system**: Tasks are simple name-to-command mappings in `goose.yaml`. `cmd_task()` lists or runs them. Unknown commands in `main()` fall back to task name lookup before erroring.
 
 **CMake converter** (`cmake.c`): A substantial (~820 line) recursive-descent parser that handles `project()`, `set()`, `list(APPEND)`, `option()`, `add_library()`, `add_executable()`, `include_directories()`, `target_include_directories()`, `target_link_libraries()`, `file(GLOB)`, `add_subdirectory()` (recursive), `CHECK_INCLUDE_FILE()`, and `if()/elseif()/else()/endif()` with variable expansion and generator expression stripping.
 
@@ -120,5 +140,5 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 ## CI/CD
 
 - `.github/workflows/ci.yml`: builds on push/PR to main, runs `make clean && make`, verifies binary
-- `.github/workflows/release.yml`: triggered by `VERSION` file changes on main. Builds for darwin-arm64, darwin-amd64, linux-amd64, linux-arm64. Creates GitHub release with tar.gz artifacts
-- `install.sh`: curl-based installer that downloads latest release from GitHub
+- `.github/workflows/release.yml`: triggered by `VERSION` file changes on main. 5 build targets: linux-amd64, linux-arm64, linux-amd64-static (musl), darwin-amd64, darwin-arm64. Packages .deb (amd64+arm64), .rpm, Arch PKGBUILD. Each tarball includes binary + libgoose.a + headers. Generates install.sh and SHA256 checksums. Creates GitHub release with all assets.
+- `install.sh`: curl-based installer that downloads latest release, installs binary + library + headers. Prefers static build on linux amd64. Supports `GOOSE_INSTALL_DIR` for custom prefix.
