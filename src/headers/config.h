@@ -11,17 +11,25 @@ typedef struct {
     char name[MAX_NAME_LEN];
     char git[MAX_PATH_LEN];
     char version[64];
+    char path[MAX_PATH_LEN];
 } Dependency;
 
 #define MAX_PLUGINS   16
 #define MAX_EXT_LEN   16
 #define MAX_CMD_LEN   256
+#define MAX_TASKS     32
+#define MAX_TASK_CMD  512
 
 typedef struct {
     char name[MAX_NAME_LEN];
     char ext[MAX_EXT_LEN];
     char command[MAX_CMD_LEN];
 } Plugin;
+
+typedef struct {
+    char name[MAX_NAME_LEN];
+    char command[MAX_TASK_CMD];
+} Task;
 
 typedef struct {
     char name[MAX_NAME_LEN];
@@ -41,6 +49,8 @@ typedef struct {
     int dep_count;
     Plugin plugins[MAX_PLUGINS];
     int plugin_count;
+    Task tasks[MAX_TASKS];
+    int task_count;
 } Config;
 
 int  config_load(const char *path, Config *cfg);

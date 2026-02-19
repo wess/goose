@@ -12,5 +12,6 @@ int cmd_update(int argc, char **argv);
 int cmd_test(int argc, char **argv);
 int cmd_install(int argc, char **argv);
 int cmd_convert(int argc, char **argv);
+int cmd_task(int argc, char **argv);
 
 #endif

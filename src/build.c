@@ -7,22 +7,32 @@
 #include "headers/main.h"
 #include "headers/color.h"
 
+/* resolve base directory for a dependency: path dep uses its path,
+   git dep uses GOOSE_PKG_DIR/name */
+static void dep_base(const Dependency *dep, char *buf, int bufsz) {
+    if (dep->path[0])
+        snprintf(buf, bufsz, "%s", dep->path);
+    else
+        snprintf(buf, bufsz, "%s/%s", GOOSE_PKG_DIR, dep->name);
+}
+
 static int collect_pkg_sources(const Config *cfg, char files[][512], int max, int *count) {
     *count = 0;
     if (cfg->dep_count == 0) return 0;
 
     for (int i = 0; i < cfg->dep_count; i++) {
+        char base[512];
+        dep_base(&cfg->deps[i], base, sizeof(base));
+
         char pkg_cfg_path[512];
-        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path),
-                 "%s/%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name, GOOSE_CONFIG);
+        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path), "%s/%s", base, GOOSE_CONFIG);
 
         /* if package has goose.yaml with explicit sources, use those */
         if (fs_exists(pkg_cfg_path)) {
             Config pkg_cfg;
             if (config_load(pkg_cfg_path, &pkg_cfg) == 0 && pkg_cfg.source_count > 0) {
                 for (int j = 0; j < pkg_cfg.source_count && *count < max; j++) {
-                    snprintf(files[*count], 512, "%s/%s/%s",
-                             GOOSE_PKG_DIR, cfg->deps[i].name, pkg_cfg.sources[j]);
+                    snprintf(files[*count], 512, "%s/%s", base, pkg_cfg.sources[j]);
                     (*count)++;
                 }
                 continue;
@@ -31,12 +41,10 @@ static int collect_pkg_sources(const Config *cfg, char files[][512], int max, in
 
         /* fallback: collect all .c files */
         char pkg_src[512];
-        snprintf(pkg_src, sizeof(pkg_src), "%s/%s/src",
-                 GOOSE_PKG_DIR, cfg->deps[i].name);
+        snprintf(pkg_src, sizeof(pkg_src), "%s/src", base);
 
         if (!fs_exists(pkg_src))
-            snprintf(pkg_src, sizeof(pkg_src), "%s/%s",
-                     GOOSE_PKG_DIR, cfg->deps[i].name);
+            snprintf(pkg_src, sizeof(pkg_src), "%s", base);
 
         int found = 0;
         fs_collect_sources(pkg_src, files + *count, max - *count, &found);
@@ -49,9 +57,11 @@ static int collect_pkg_sources(const Config *cfg, char files[][512], int max, in
 static void collect_pkg_ldflags(const Config *cfg, char *buf, int bufsz) {
     int off = (int)strlen(buf);
     for (int i = 0; i < cfg->dep_count; i++) {
+        char base[512];
+        dep_base(&cfg->deps[i], base, sizeof(base));
+
         char pkg_cfg_path[512];
-        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path),
-                 "%s/%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name, GOOSE_CONFIG);
+        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path), "%s/%s", base, GOOSE_CONFIG);
         if (!fs_exists(pkg_cfg_path)) continue;
 
         Config pkg_cfg;
@@ -69,9 +79,11 @@ static void collect_pkg_ldflags(const Config *cfg, char *buf, int bufsz) {
 static void collect_pkg_defines(const Config *cfg, char *buf, int bufsz) {
     int off = (int)strlen(buf);
     for (int i = 0; i < cfg->dep_count; i++) {
+        char base[512];
+        dep_base(&cfg->deps[i], base, sizeof(base));
+
         char pkg_cfg_path[512];
-        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path),
-                 "%s/%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name, GOOSE_CONFIG);
+        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path), "%s/%s", base, GOOSE_CONFIG);
         if (!fs_exists(pkg_cfg_path)) continue;
 
         Config pkg_cfg;
@@ -113,17 +125,18 @@ static void build_include_flags(const Config *cfg, char *buf, int bufsz) {
     /* package includes: read each package's goose.yaml for its includes,
        or fall back to common locations */
     for (int i = 0; i < cfg->dep_count; i++) {
+        char base[512];
+        dep_base(&cfg->deps[i], base, sizeof(base));
+
         char pkg_cfg_path[512];
-        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path),
-                 "%s/%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name, GOOSE_CONFIG);
+        snprintf(pkg_cfg_path, sizeof(pkg_cfg_path), "%s/%s", base, GOOSE_CONFIG);
 
         if (fs_exists(pkg_cfg_path)) {
             Config pkg_cfg;
             if (config_load(pkg_cfg_path, &pkg_cfg) == 0) {
                 for (int j = 0; j < pkg_cfg.include_count; j++) {
                     char inc[512];
-                    snprintf(inc, sizeof(inc), "%s/%s/%s",
-                             GOOSE_PKG_DIR, cfg->deps[i].name, pkg_cfg.includes[j]);
+                    snprintf(inc, sizeof(inc), "%s/%s", base, pkg_cfg.includes[j]);
                     off += snprintf(buf + off, bufsz - off, "-I%s ", inc);
                 }
                 continue;
@@ -132,14 +145,13 @@ static void build_include_flags(const Config *cfg, char *buf, int bufsz) {
 
         /* fallback: try src/, root, include/ */
         char inc[512];
-        snprintf(inc, sizeof(inc), "%s/%s/src", GOOSE_PKG_DIR, cfg->deps[i].name);
+        snprintf(inc, sizeof(inc), "%s/src", base);
         if (fs_exists(inc))
             off += snprintf(buf + off, bufsz - off, "-I%s ", inc);
 
-        snprintf(inc, sizeof(inc), "%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name);
-        off += snprintf(buf + off, bufsz - off, "-I%s ", inc);
+        off += snprintf(buf + off, bufsz - off, "-I%s ", base);
 
-        snprintf(inc, sizeof(inc), "%s/%s/include", GOOSE_PKG_DIR, cfg->deps[i].name);
+        snprintf(inc, sizeof(inc), "%s/include", base);
         if (fs_exists(inc))
             off += snprintf(buf + off, bufsz - off, "-I%s ", inc);
     }

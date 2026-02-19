@@ -47,6 +47,26 @@ static int checkout_sha(const char *pkg_path, const char *sha) {
 }
 
 int pkg_fetch(const Dependency *dep, const char *pkg_dir, LockFile *lf) {
+    /* path dependencies are local — skip git operations */
+    if (dep->path[0]) {
+        if (!fs_exists(dep->path)) {
+            err("path dependency '%s' not found at %s", dep->name, dep->path);
+            return -1;
+        }
+        /* resolve transitive deps from path dep's goose.yaml */
+        char sub_cfg_path[512];
+        snprintf(sub_cfg_path, sizeof(sub_cfg_path), "%s/%s", dep->path, GOOSE_CONFIG);
+        if (fs_exists(sub_cfg_path)) {
+            Config sub;
+            if (config_load(sub_cfg_path, &sub) == 0 && sub.dep_count > 0) {
+                info("Resolving", "transitive dependencies for %s", dep->name);
+                for (int i = 0; i < sub.dep_count; i++)
+                    pkg_fetch(&sub.deps[i], pkg_dir, lf);
+            }
+        }
+        return 0;
+    }
+
     char dest[512];
     snprintf(dest, sizeof(dest), "%s/%s", pkg_dir, dep->name);
 
@@ -104,7 +124,7 @@ int pkg_fetch(const Dependency *dep, const char *pkg_dir, LockFile *lf) {
         lock_update_entry(lf, dep->name, dep->git, sha);
     }
 
-    /* auto-convert CMakeLists.txt → goose.yaml (always re-convert if cmake exists) */
+    /* auto-convert CMakeLists.txt to goose.yaml */
     char sub_cfg_path[512];
     snprintf(sub_cfg_path, sizeof(sub_cfg_path), "%s/%s", dest, GOOSE_CONFIG);
     char cmake_path[512];
@@ -159,6 +179,9 @@ int pkg_update_all(const Config *cfg, LockFile *lf) {
     }
 
     for (int i = 0; i < cfg->dep_count; i++) {
+        /* skip path dependencies — they're managed locally */
+        if (cfg->deps[i].path[0]) continue;
+
         char dest[512];
         snprintf(dest, sizeof(dest), "%s/%s", GOOSE_PKG_DIR, cfg->deps[i].name);
 

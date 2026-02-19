@@ -27,7 +27,7 @@ void config_default(Config *cfg, const char *name) {
 /* --- YAML Loading --- */
 
 typedef enum {
-    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD, S_PLUGINS, S_PLUGIN_ENTRY
+    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD, S_PLUGINS, S_PLUGIN_ENTRY, S_TASKS
 } Section;
 
 int config_load(const char *path, Config *cfg) {
@@ -98,6 +98,8 @@ int config_load(const char *path, Config *cfg) {
                 section = S_BUILD;
             else if (depth == 2 && strcmp(key, "plugins") == 0)
                 section = S_PLUGINS;
+            else if (depth == 2 && strcmp(key, "tasks") == 0)
+                section = S_TASKS;
             else if (section == S_DEPS && depth == 3) {
                 section = S_DEP_ENTRY;
                 if (cfg->dep_count < MAX_DEPS) {
@@ -175,6 +177,8 @@ int config_load(const char *path, Config *cfg) {
                         strncpy(cur_dep->git, val, MAX_PATH_LEN - 1);
                     else if (strcmp(key, "version") == 0)
                         strncpy(cur_dep->version, val, 63);
+                    else if (strcmp(key, "path") == 0)
+                        strncpy(cur_dep->path, val, MAX_PATH_LEN - 1);
                 } else if (section == S_PLUGIN_ENTRY && cur_plugin) {
                     if (strcmp(key, "ext") == 0)
                         strncpy(cur_plugin->ext, val, MAX_EXT_LEN - 1);
@@ -189,7 +193,12 @@ int config_load(const char *path, Config *cfg) {
                         strncpy(cfg->ldflags, val, 255);
                     else if (strcmp(key, "src_dir") == 0)
                         strncpy(cfg->src_dir, val, MAX_PATH_LEN - 1);
-
+                } else if (section == S_TASKS) {
+                    if (cfg->task_count < MAX_TASKS) {
+                        strncpy(cfg->tasks[cfg->task_count].name, key, MAX_NAME_LEN - 1);
+                        strncpy(cfg->tasks[cfg->task_count].command, val, MAX_TASK_CMD - 1);
+                        cfg->task_count++;
+                    }
                 }
                 in_key = 0;
             }
@@ -244,9 +253,13 @@ int config_save(const char *path, const Config *cfg) {
     fprintf(f, "dependencies:\n");
     for (int i = 0; i < cfg->dep_count; i++) {
         fprintf(f, "  %s:\n", cfg->deps[i].name);
-        fprintf(f, "    git: \"%s\"\n", cfg->deps[i].git);
-        if (strlen(cfg->deps[i].version) > 0)
-            fprintf(f, "    version: \"%s\"\n", cfg->deps[i].version);
+        if (strlen(cfg->deps[i].path) > 0) {
+            fprintf(f, "    path: \"%s\"\n", cfg->deps[i].path);
+        } else {
+            fprintf(f, "    git: \"%s\"\n", cfg->deps[i].git);
+            if (strlen(cfg->deps[i].version) > 0)
+                fprintf(f, "    version: \"%s\"\n", cfg->deps[i].version);
+        }
     }
 
     if (cfg->plugin_count > 0) {
@@ -256,6 +269,12 @@ int config_save(const char *path, const Config *cfg) {
             fprintf(f, "    ext: \"%s\"\n", cfg->plugins[i].ext);
             fprintf(f, "    command: \"%s\"\n", cfg->plugins[i].command);
         }
+    }
+
+    if (cfg->task_count > 0) {
+        fprintf(f, "\ntasks:\n");
+        for (int i = 0; i < cfg->task_count; i++)
+            fprintf(f, "  %s: \"%s\"\n", cfg->tasks[i].name, cfg->tasks[i].command);
     }
 
     fclose(f);

@@ -1,0 +1,31 @@
+project:
+  name: "goose"
+  version: "0.1.0"
+  description: "Cargo-inspired build tool for C"
+  author: ""
+  license: "MIT"
+
+build:
+  cc: "cc"
+  cflags: "-std=c11 -DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 -DYAML_VERSION_STRING=\\\"0.2.5\\\""
+  includes:
+    - "src"
+    - "libs/libyaml/include"
+    - "libs/libyaml/src"
+  sources:
+    - "src/build.c"
+    - "src/config.c"
+    - "src/fs.c"
+    - "src/lock.c"
+    - "src/pkg.c"
+    - "src/cmake.c"
+    - "libs/libyaml/src/api.c"
+    - "libs/libyaml/src/dumper.c"
+    - "libs/libyaml/src/emitter.c"
+    - "libs/libyaml/src/loader.c"
+    - "libs/libyaml/src/parser.c"
+    - "libs/libyaml/src/reader.c"
+    - "libs/libyaml/src/scanner.c"
+    - "libs/libyaml/src/writer.c"
+
+dependencies:

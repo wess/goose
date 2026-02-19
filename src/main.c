@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/wait.h>
 #include "headers/main.h"
+#include "headers/config.h"
 #include "headers/cmd.h"
 #include "headers/color.h"
 
@@ -22,6 +25,7 @@ static Command commands[] = {
     {"update",  "Update all dependencies",                 cmd_update},
     {"install", "Install binary to system",                cmd_install},
     {"convert", "Convert CMakeLists.txt to goose.yaml",   cmd_convert},
+    {"task",    "Run a project task",                     cmd_task},
     {NULL, NULL, NULL}
 };
 
@@ -57,6 +61,19 @@ int main(int argc, char **argv) {
     for (Command *c = commands; c->name; c++) {
         if (strcmp(argv[1], c->name) == 0)
             return c->fn(argc - 1, argv + 1);
+    }
+
+    /* fallback: check if it's a task name */
+    Config cfg;
+    if (config_load(GOOSE_CONFIG, &cfg) == 0) {
+        for (int i = 0; i < cfg.task_count; i++) {
+            if (strcmp(argv[1], cfg.tasks[i].name) == 0) {
+                info("Running", "%s", cfg.tasks[i].name);
+                int ret = system(cfg.tasks[i].command);
+                if (WIFEXITED(ret)) return WEXITSTATUS(ret);
+                return 1;
+            }
+        }
     }
 
     err("unknown command '%s'", argv[1]);
