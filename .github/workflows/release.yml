@@ -6,59 +6,28 @@ on:
     paths:
       - VERSION
 
+permissions:
+  contents: write
+
 jobs:
-  check-version:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      changed: ${{ steps.check.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
+      - id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Check if VERSION changed
-        id: check
-        run: |
-          if git diff HEAD~1 --name-only | grep -q '^VERSION$'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Read version
-        id: version
-        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: check-version
-    if: needs.check-version.outputs.changed == 'true'
-    strategy:
-      matrix:
-        include:
-          - runner: macos-latest
-            os: darwin
-            arch: arm64
-            artifact: goose-darwin-arm64
-          - runner: macos-13
-            os: darwin
-            arch: amd64
-            artifact: goose-darwin-amd64
-          - runner: ubuntu-latest
-            os: linux
-            arch: amd64
-            artifact: goose-linux-amd64
-          - runner: ubuntu-24.04-arm
-            os: linux
-            arch: arm64
-            artifact: goose-linux-arm64
-    runs-on: ${{ matrix.runner }}
+  build-linux-amd64:
+    needs: prepare
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Build
         run: make clean && make
-
+      - name: Smoke test
+        run: ./build/goose --version
       - name: Package
         run: |
           mkdir -p staging/bin staging/lib staging/include/goose/headers
@@ -66,36 +35,403 @@ jobs:
           cp build/libgoose.a staging/lib/
           cp include/goose.h staging/include/goose/
           cp src/headers/*.h staging/include/goose/headers/
-          tar czf ${{ matrix.artifact }}.tar.gz -C staging .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          mkdir -p dist
+          tar czf "dist/goose-${{ needs.prepare.outputs.version }}-linux-amd64.tar.gz" -C staging .
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.tar.gz
+          name: goose-linux-amd64
+          path: dist/
+
+  build-linux-arm64:
+    needs: prepare
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make clean && make
+      - name: Smoke test
+        run: ./build/goose --version
+      - name: Package
+        run: |
+          mkdir -p staging/bin staging/lib staging/include/goose/headers
+          cp build/goose staging/bin/
+          cp build/libgoose.a staging/lib/
+          cp include/goose.h staging/include/goose/
+          cp src/headers/*.h staging/include/goose/headers/
+          mkdir -p dist
+          tar czf "dist/goose-${{ needs.prepare.outputs.version }}-linux-arm64.tar.gz" -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-linux-arm64
+          path: dist/
+
+  build-linux-static:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build
+        run: make clean && make CC=musl-gcc LDFLAGS=-static
+      - name: Smoke test
+        run: ./build/goose --version
+      - name: Package
+        run: |
+          mkdir -p staging/bin staging/lib staging/include/goose/headers
+          cp build/goose staging/bin/
+          cp build/libgoose.a staging/lib/
+          cp include/goose.h staging/include/goose/
+          cp src/headers/*.h staging/include/goose/headers/
+          mkdir -p dist
+          tar czf "dist/goose-${{ needs.prepare.outputs.version }}-linux-amd64-static.tar.gz" -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-linux-amd64-static
+          path: dist/
+
+  build-macos-amd64:
+    needs: prepare
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make clean && make CC="cc -target x86_64-apple-macos12"
+      - name: Package
+        run: |
+          mkdir -p staging/bin staging/lib staging/include/goose/headers
+          cp build/goose staging/bin/
+          cp build/libgoose.a staging/lib/
+          cp include/goose.h staging/include/goose/
+          cp src/headers/*.h staging/include/goose/headers/
+          mkdir -p dist
+          tar czf "dist/goose-${{ needs.prepare.outputs.version }}-darwin-amd64.tar.gz" -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-darwin-amd64
+          path: dist/
+
+  build-macos-arm64:
+    needs: prepare
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make clean && make
+      - name: Smoke test
+        run: ./build/goose --version
+      - name: Package
+        run: |
+          mkdir -p staging/bin staging/lib staging/include/goose/headers
+          cp build/goose staging/bin/
+          cp build/libgoose.a staging/lib/
+          cp include/goose.h staging/include/goose/
+          cp src/headers/*.h staging/include/goose/headers/
+          mkdir -p dist
+          tar czf "dist/goose-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz" -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-darwin-arm64
+          path: dist/
+
+  package-deb:
+    needs: [prepare, build-linux-amd64, build-linux-arm64]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.build-linux-amd64.result == 'success' || needs.build-linux-arm64.result == 'success') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            arch: amd64
+          - target: linux-arm64
+            arch: arm64
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: goose-${{ matrix.target }}
+          path: dist/
+
+      - name: Build .deb
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          PKG="goose_${VERSION}_${ARCH}"
+          mkdir -p "${PKG}/DEBIAN" "${PKG}/usr/bin" "${PKG}/usr/lib" "${PKG}/usr/include/goose/headers"
+
+          TMPDIR="$(mktemp -d)"
+          tar xzf "dist/goose-${VERSION}-${TARGET}.tar.gz" -C "$TMPDIR"
+          cp "$TMPDIR/bin/goose" "${PKG}/usr/bin/"
+          cp "$TMPDIR/lib/libgoose.a" "${PKG}/usr/lib/"
+          cp "$TMPDIR/include/goose/goose.h" "${PKG}/usr/include/goose/"
+          cp "$TMPDIR/include/goose/headers/"*.h "${PKG}/usr/include/goose/headers/"
+          chmod 755 "${PKG}/usr/bin/goose"
+
+          cat > "${PKG}/DEBIAN/control" <<CTRL
+          Package: goose
+          Version: ${VERSION}
+          Section: devel
+          Priority: optional
+          Architecture: ${ARCH}
+          Maintainer: Wess Cope
+          Homepage: https://github.com/wess/goose
+          Description: A package manager and build tool for C
+           Goose is a Cargo-inspired package manager and build tool for C.
+           Features YAML-based project configuration, git-based dependency
+           management, lock files, and CMake project conversion.
+          CTRL
+
+          sed -i 's/^          //' "${PKG}/DEBIAN/control"
+          dpkg-deb --build --root-owner-group "${PKG}"
+          mv "${PKG}.deb" dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-deb-${{ matrix.arch }}
+          path: dist/*.deb
+
+  package-rpm:
+    needs: [prepare, build-linux-amd64]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build-linux-amd64.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: goose-linux-amd64
+          path: dist/
+
+      - name: Install rpmbuild
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Build .rpm
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+          TMPDIR="$(mktemp -d)"
+          tar xzf "dist/goose-${VERSION}-linux-amd64.tar.gz" -C "$TMPDIR"
+          cp "$TMPDIR/bin/goose" rpmbuild/SOURCES/
+          cp "$TMPDIR/lib/libgoose.a" rpmbuild/SOURCES/
+          mkdir -p rpmbuild/SOURCES/headers
+          cp "$TMPDIR/include/goose/goose.h" rpmbuild/SOURCES/
+          cp "$TMPDIR/include/goose/headers/"*.h rpmbuild/SOURCES/headers/
+
+          cat > rpmbuild/SPECS/goose.spec <<'SPEC'
+          Name:           goose
+          Version:        %{_goose_version}
+          Release:        1%{?dist}
+          Summary:        A package manager and build tool for C
+          License:        MIT
+          URL:            https://github.com/wess/goose
+
+          %description
+          Goose is a Cargo-inspired package manager and build tool for C.
+          Features YAML-based project configuration, git-based dependency
+          management, lock files, and CMake project conversion.
+
+          %install
+          mkdir -p %{buildroot}%{_bindir}
+          install -m 755 %{_sourcedir}/goose %{buildroot}%{_bindir}/goose
+          mkdir -p %{buildroot}%{_libdir}
+          install -m 644 %{_sourcedir}/libgoose.a %{buildroot}%{_libdir}/libgoose.a
+          mkdir -p %{buildroot}%{_includedir}/goose/headers
+          install -m 644 %{_sourcedir}/goose.h %{buildroot}%{_includedir}/goose/goose.h
+          for h in %{_sourcedir}/headers/*.h; do
+            install -m 644 "$h" %{buildroot}%{_includedir}/goose/headers/
+          done
+
+          %files
+          %{_bindir}/goose
+          %{_libdir}/libgoose.a
+          %{_includedir}/goose/goose.h
+          %{_includedir}/goose/headers/*.h
+          SPEC
+
+          sed -i 's/^          //' rpmbuild/SPECS/goose.spec
+          rpmbuild \
+            --define "_topdir $(pwd)/rpmbuild" \
+            --define "_goose_version ${VERSION}" \
+            -bb rpmbuild/SPECS/goose.spec
+
+          find rpmbuild/RPMS -name '*.rpm' -exec cp {} dist/ \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-rpm
+          path: dist/*.rpm
+
+  package-arch:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate PKGBUILD
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p dist
+
+          cat > dist/PKGBUILD <<'EOF'
+          # Maintainer: Wess Cope
+          pkgname=goose
+          pkgver=_VERSION_
+          pkgrel=1
+          pkgdesc="A package manager and build tool for C"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/wess/goose"
+          license=('MIT')
+          depends=('glibc')
+          makedepends=('gcc' 'make')
+          source=("${url}/archive/v${pkgver}.tar.gz")
+          sha256sums=('SKIP')
+
+          build() {
+            cd "${pkgname}-${pkgver}"
+            make clean && make
+          }
+
+          package() {
+            cd "${pkgname}-${pkgver}"
+            make install PREFIX="${pkgdir}/usr"
+          }
+          EOF
+
+          sed -i "s/_VERSION_/${VERSION}/" dist/PKGBUILD
+          sed -i 's/^          //' dist/PKGBUILD
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-pkgbuild
+          path: dist/PKGBUILD
+
+  installer-script:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate install script
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p dist
+
+          cat > dist/install.sh <<'SCRIPT'
+          #!/bin/sh
+          set -eu
+
+          REPO="wess/goose"
+          VERSION="_VERSION_"
+          INSTALL_DIR="${GOOSE_INSTALL_DIR:-/usr/local}"
+
+          detect_platform() {
+            OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+            ARCH="$(uname -m)"
+
+            case "${OS}" in
+              linux)  OS="linux" ;;
+              darwin) OS="darwin" ;;
+              *)      echo "Unsupported OS: ${OS}" >&2; exit 1 ;;
+            esac
+
+            case "${ARCH}" in
+              x86_64|amd64)   ARCH="amd64" ;;
+              aarch64|arm64)  ARCH="arm64" ;;
+              *)              echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;;
+            esac
+
+            SUFFIX=""
+            if [ "${OS}" = "linux" ] && [ "${ARCH}" = "amd64" ]; then
+              SUFFIX="-static"
+            fi
+
+            echo "${OS}-${ARCH}${SUFFIX}"
+          }
+
+          PLATFORM="$(detect_platform)"
+          TARBALL="goose-${VERSION}-${PLATFORM}.tar.gz"
+          URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
+
+          TMPDIR="$(mktemp -d)"
+          trap 'rm -rf "${TMPDIR}"' EXIT
+
+          echo "Downloading goose v${VERSION} for ${PLATFORM}..."
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "${URL}" -o "${TMPDIR}/${TARBALL}"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -q "${URL}" -O "${TMPDIR}/${TARBALL}"
+          else
+            echo "Error: curl or wget required" >&2
+            exit 1
+          fi
+
+          tar xzf "${TMPDIR}/${TARBALL}" -C "${TMPDIR}"
+
+          do_install() {
+            "$@" install -d "${INSTALL_DIR}/bin"
+            "$@" install -m 755 "${TMPDIR}/bin/goose" "${INSTALL_DIR}/bin/goose"
+            "$@" install -d "${INSTALL_DIR}/lib"
+            "$@" install -m 644 "${TMPDIR}/lib/libgoose.a" "${INSTALL_DIR}/lib/libgoose.a"
+            "$@" install -d "${INSTALL_DIR}/include/goose/headers"
+            "$@" install -m 644 "${TMPDIR}/include/goose/goose.h" "${INSTALL_DIR}/include/goose/goose.h"
+            for h in "${TMPDIR}/include/goose/headers/"*.h; do
+              "$@" install -m 644 "$h" "${INSTALL_DIR}/include/goose/headers/"
+            done
+          }
+
+          if [ -w "${INSTALL_DIR}/bin" ] 2>/dev/null || [ -w "${INSTALL_DIR}" ]; then
+            do_install
+          else
+            echo "Installing to ${INSTALL_DIR} (requires sudo)..."
+            do_install sudo
+          fi
+
+          echo "goose v${VERSION} installed to ${INSTALL_DIR}/bin/goose"
+          SCRIPT
+
+          sed -i "s/_VERSION_/${VERSION}/g" dist/install.sh
+          chmod +x dist/install.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goose-installer
+          path: dist/install.sh
 
   release:
-    needs: [check-version, build]
+    needs: [prepare, build-linux-amd64, build-linux-arm64, build-linux-static, build-macos-amd64, build-macos-arm64, package-deb, package-rpm, package-arch, installer-script]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          path: artifacts/
+
+      - name: Collect release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f \( \
+            -name '*.tar.gz' -o \
+            -name '*.deb' -o \
+            -name '*.rpm' -o \
+            -name 'PKGBUILD' -o \
+            -name 'install.sh' \
+          \) -exec cp {} release/ \;
+          echo "Release assets:"
+          ls -lh release/
+
+      - name: Generate checksums
+        working-directory: release
+        run: sha256sum * > checksums.txt
 
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          version="v${{ needs.check-version.outputs.version }}"
-          git tag "$version"
-          git push origin "$version"
-          gh release create "$version" \
-            --title "$version" \
+          gh release create "v${VERSION}" \
+            --title "goose v${VERSION}" \
             --generate-notes \
-            artifacts/*.tar.gz
+            release/*
