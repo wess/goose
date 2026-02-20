@@ -70,9 +70,9 @@ static int collect_recursive_ext(const char *dir, const char *ext,
     return 0;
 }
 
-int fs_collect_sources(const char *dir, char files[][512], int max, int *count) {
+int fs_collect_sources(const char *dir, const char *ext, char files[][512], int max, int *count) {
     *count = 0;
-    return collect_recursive_ext(dir, ".c", files, max, count);
+    return collect_recursive_ext(dir, ext, files, max, count);
 }
 
 int fs_collect_ext(const char *dir, const char *ext,

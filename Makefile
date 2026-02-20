@@ -11,8 +11,12 @@ YAML_SRC = $(wildcard libs/libyaml/src/*.c)
 YAML_OBJ = $(YAML_SRC:libs/libyaml/src/%.c=$(OBJDIR)/yaml_%.o)
 
 SRC      = $(filter-out src/main.c, $(wildcard src/*.c))
-CMD_SRC  = $(wildcard src/cmd/*.c)
-LIB_OBJ  = $(SRC:src/%.c=$(OBJDIR)/%.o) $(CMD_SRC:src/cmd/%.c=$(OBJDIR)/cmd/%.o) $(YAML_OBJ)
+DRV_SRC  = $(wildcard src/driver/*.c)
+LANG_SRC = $(wildcard src/lang/c/*.c)
+LIB_OBJ  = $(SRC:src/%.c=$(OBJDIR)/%.o) \
+            $(DRV_SRC:src/driver/%.c=$(OBJDIR)/driver/%.o) \
+            $(LANG_SRC:src/lang/c/%.c=$(OBJDIR)/lang/c/%.o) \
+            $(YAML_OBJ)
 CLI_OBJ  = $(OBJDIR)/main.o
 
 LIB      = $(BUILD)/libgoose.a
@@ -37,7 +41,10 @@ $(BIN): $(CLI_OBJ) $(LIB)
 $(OBJDIR)/%.o: src/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJDIR)/cmd/%.o: src/cmd/%.c | $(OBJDIR)
+$(OBJDIR)/driver/%.o: src/driver/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/lang/c/%.o: src/lang/c/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 YAML_DEFS = -DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 \
@@ -47,7 +54,7 @@ $(OBJDIR)/yaml_%.o: libs/libyaml/src/%.c | $(OBJDIR)
 	$(CC) $(YAML_DEFS) -Ilibs/libyaml/include -Ilibs/libyaml/src -w -c $< -o $@
 
 $(OBJDIR):
-	mkdir -p $(OBJDIR) $(OBJDIR)/cmd
+	mkdir -p $(OBJDIR) $(OBJDIR)/driver $(OBJDIR)/lang/c
 
 clean:
 	rm -rf $(BUILD)
@@ -62,6 +69,8 @@ install: all
 	for h in src/headers/*.h; do \
 		install -m 644 "$$h" $(PREFIX)/include/goose/headers/; \
 	done
+	install -d $(PREFIX)/include/goose/lang/c
+	install -m 644 src/lang/c/driver.h $(PREFIX)/include/goose/lang/c/driver.h
 
 uninstall:
 	rm -f $(PREFIX)/bin/goose
