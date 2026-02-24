@@ -27,7 +27,8 @@ void config_default(Config *cfg, const char *name) {
 /* --- YAML Loading --- */
 
 typedef enum {
-    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD, S_PLUGINS, S_PLUGIN_ENTRY, S_TASKS
+    S_NONE, S_PROJECT, S_DEPS, S_DEP_ENTRY, S_BUILD, S_PLUGINS, S_PLUGIN_ENTRY, S_TASKS,
+    S_WORKSPACE
 } Section;
 
 int config_load(const char *path, Config *cfg) {
@@ -51,6 +52,7 @@ int config_load(const char *path, Config *cfg) {
     int in_includes = 0;
     int parsed_includes = 0;
     int in_sources = 0;
+    int in_ws_members = 0;
     Dependency *cur_dep = NULL;
     Plugin *cur_plugin = NULL;
 
@@ -78,12 +80,16 @@ int config_load(const char *path, Config *cfg) {
             } else if (section == S_BUILD && strcmp(key, "sources") == 0) {
                 in_sources = 1;
                 cfg->source_count = 0;
+            } else if (section == S_WORKSPACE && strcmp(key, "members") == 0) {
+                in_ws_members = 1;
+                cfg->ws_member_count = 0;
             }
             break;
 
         case YAML_SEQUENCE_END_EVENT:
             in_includes = 0;
             in_sources = 0;
+            in_ws_members = 0;
             in_key = 0;
             break;
 
@@ -100,6 +106,8 @@ int config_load(const char *path, Config *cfg) {
                 section = S_PLUGINS;
             else if (depth == 2 && strcmp(key, "tasks") == 0)
                 section = S_TASKS;
+            else if (depth == 2 && strcmp(key, "workspace") == 0)
+                section = S_WORKSPACE;
             else if (section == S_DEPS && depth == 3) {
                 section = S_DEP_ENTRY;
                 if (cfg->dep_count < MAX_DEPS) {
@@ -156,6 +164,15 @@ int config_load(const char *path, Config *cfg) {
                 break;
             }
 
+            /* items inside workspace members sequence */
+            if (in_ws_members) {
+                if (cfg->ws_member_count < MAX_WS_MEMBERS) {
+                    strncpy(cfg->ws_members[cfg->ws_member_count], val, MAX_PATH_LEN - 1);
+                    cfg->ws_member_count++;
+                }
+                break;
+            }
+
             if (!in_key) {
                 strncpy(key, val, 255);
                 key[255] = '\0';
@@ -172,6 +189,8 @@ int config_load(const char *path, Config *cfg) {
                         strncpy(cfg->author, val, MAX_NAME_LEN - 1);
                     else if (strcmp(key, "license") == 0)
                         strncpy(cfg->license, val, 63);
+                    else if (strcmp(key, "type") == 0)
+                        strncpy(cfg->type, val, 15);
                 } else if (section == S_DEP_ENTRY && cur_dep) {
                     if (strcmp(key, "git") == 0)
                         strncpy(cur_dep->git, val, MAX_PATH_LEN - 1);
@@ -225,12 +244,22 @@ int config_save(const char *path, const Config *cfg) {
         return -1;
     }
 
+    if (cfg->ws_member_count > 0) {
+        fprintf(f, "workspace:\n");
+        fprintf(f, "  members:\n");
+        for (int i = 0; i < cfg->ws_member_count; i++)
+            fprintf(f, "    - \"%s\"\n", cfg->ws_members[i]);
+        fprintf(f, "\n");
+    }
+
     fprintf(f, "project:\n");
     fprintf(f, "  name: \"%s\"\n", cfg->name);
     fprintf(f, "  version: \"%s\"\n", cfg->version);
     fprintf(f, "  description: \"%s\"\n", cfg->description);
     fprintf(f, "  author: \"%s\"\n", cfg->author);
     fprintf(f, "  license: \"%s\"\n", cfg->license);
+    if (cfg->type[0])
+        fprintf(f, "  type: \"%s\"\n", cfg->type);
     fprintf(f, "\n");
 
     fprintf(f, "build:\n");

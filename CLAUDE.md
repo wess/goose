@@ -23,8 +23,8 @@ src/
     task.c            — goose task (list/run named tasks from goose.yaml)
   headers/
     main.h            — version macro, path constants (GOOSE_CONFIG, GOOSE_LOCK, GOOSE_PKG_DIR, GOOSE_BUILD)
-    config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_PLUGINS=16, MAX_TASKS=32)
-    build.h           — build_project(), build_transpile(), build_clean()
+    config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_PLUGINS=16, MAX_TASKS=32, MAX_WS_MEMBERS=32), workspace fields (type, ws_members, ws_member_count)
+    build.h           — build_project(), build_project_at(), build_library(), build_transpile(), build_clean()
     pkg.h             — pkg_fetch(), pkg_remove(), pkg_fetch_all(), pkg_update_all(), pkg_name_from_git(), pkg_get_sha()
     fs.h              — fs_mkdir(), fs_exists(), fs_rmrf(), fs_write_file(), fs_collect_sources(), fs_collect_ext()
     lock.h            — LockFile/LockEntry structs, lock_load/save/find_sha/update_entry
@@ -82,12 +82,18 @@ goose <taskname>                  # shorthand: unknown commands fall back to tas
 ## goose.yaml Schema
 
 ```yaml
+workspace:                 # optional, makes this a workspace root
+  members:
+    - "mylib"
+    - "myapp"
+
 project:
   name: "myapp"
   version: "0.1.0"
   description: ""
   author: ""
   license: "MIT"
+  type: "lib"            # optional, "lib" for library (produces .a), omitted for binary
 
 build:
   cc: "cc"
@@ -129,7 +135,11 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 
 **Path dependency resolution**: `dep_base()` helper in `build.c` returns `dep->path` for path deps or `GOOSE_PKG_DIR/dep->name` for git deps. All source/include/ldflag/define collection functions use `dep_base()` to resolve the correct base directory.
 
-**Build pipeline**: `build_project()` runs `build_transpile()` first (processes plugins), then collects project sources from `src_dir`, generated sources from `build/gen/`, and package sources (prefers explicit `sources` list from package `goose.yaml`, falls back to recursive `.c` collection). Assembles include flags from both project and package configs, collects `-D` defines and ldflags from package cflags, then invokes `cc` as a single compilation command. Debug builds use `-g -DDEBUG`, release uses `-O2 -DNDEBUG`. Output goes to `build/debug/` or `build/release/`.
+**Build pipeline**: `build_project()` calls `build_project_at()` with default gen_dir (`build/gen`). `build_project_at()` runs `build_transpile()` first (processes plugins), then collects project sources from `src_dir`, generated sources from the provided `gen_dir`, and package sources (prefers explicit `sources` list from package `goose.yaml`, falls back to recursive `.c` collection). Assembles include flags from both project and package configs, collects `-D` defines and ldflags from package cflags, then invokes `cc` as a single compilation command. Debug builds use `-g -DDEBUG`, release uses `-O2 -DNDEBUG`. Output goes to `build/debug/` or `build/release/`.
+
+**Library builds**: `build_library()` compiles each source file to an individual `.o` in `build/obj/{name}/`, then archives all objects with `ar rcs build/lib/lib{name}.a`. Used by workspace builds for `type: "lib"` members.
+
+**Workspace support**: Config supports `workspace.members` (list of member directory paths) and `project.type` ("lib" for libraries). `config_load` parses the `workspace:` section with `members:` sequence. `config_save` writes the workspace section when `ws_member_count > 0`.
 
 **Plugin/transpile system**: `build_transpile()` iterates plugins defined in `goose.yaml`, collects files matching each plugin's `ext`, and runs the plugin `command` on each file, writing output to `build/gen/`. Generated `.c` files are included in the main compilation.
 

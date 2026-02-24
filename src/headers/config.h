@@ -19,6 +19,7 @@ typedef struct {
 #define MAX_CMD_LEN   256
 #define MAX_TASKS     32
 #define MAX_TASK_CMD  512
+#define MAX_WS_MEMBERS 32
 
 typedef struct {
     char name[MAX_NAME_LEN];
@@ -51,6 +52,9 @@ typedef struct {
     int plugin_count;
     Task tasks[MAX_TASKS];
     int task_count;
+    char type[16];
+    char ws_members[MAX_WS_MEMBERS][MAX_PATH_LEN];
+    int ws_member_count;
 } Config;
 
 int  config_load(const char *path, Config *cfg);

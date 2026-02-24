@@ -196,7 +196,7 @@ int build_transpile(const Config *cfg) {
     return 0;
 }
 
-int build_project(const Config *cfg, int release) {
+int build_project_at(const Config *cfg, int release, const char *gen_dir) {
     char out_dir[512];
     snprintf(out_dir, sizeof(out_dir), "%s/%s",
              GOOSE_BUILD, release ? "release" : "debug");
@@ -210,10 +210,8 @@ int build_project(const Config *cfg, int release) {
     int src_count = 0;
     fs_collect_sources(cfg->src_dir, src_files, MAX_SRC_FILES, &src_count);
 
-    /* collect generated sources from build/gen/ */
-    char gen_dir[512];
-    snprintf(gen_dir, sizeof(gen_dir), "%s/gen", GOOSE_BUILD);
-    if (fs_exists(gen_dir)) {
+    /* collect generated sources */
+    if (gen_dir && fs_exists(gen_dir)) {
         int gen_count = 0;
         fs_collect_sources(gen_dir, src_files + src_count,
                            MAX_SRC_FILES - src_count, &gen_count);
@@ -233,7 +231,7 @@ int build_project(const Config *cfg, int release) {
     build_include_flags(cfg, includes, sizeof(includes));
 
     /* add generated source include path */
-    if (fs_exists(gen_dir)) {
+    if (gen_dir && fs_exists(gen_dir)) {
         int ioff = (int)strlen(includes);
         snprintf(includes + ioff, sizeof(includes) - ioff, "-I%s ", gen_dir);
     }
@@ -279,6 +277,101 @@ int build_project(const Config *cfg, int release) {
     }
 
     info("Finished", "%s", output);
+    return 0;
+}
+
+int build_project(const Config *cfg, int release) {
+    char gd[512];
+    snprintf(gd, sizeof(gd), "%s/gen", GOOSE_BUILD);
+    return build_project_at(cfg, release, gd);
+}
+
+int build_library(const Config *cfg, int release, const char *gen_dir) {
+    char lib_dir[512], obj_parent[512], obj_dir[512];
+    snprintf(lib_dir, sizeof(lib_dir), "%s/lib", GOOSE_BUILD);
+    snprintf(obj_parent, sizeof(obj_parent), "%s/obj", GOOSE_BUILD);
+    snprintf(obj_dir, sizeof(obj_dir), "%s/obj/%s", GOOSE_BUILD, cfg->name);
+    fs_mkdir(GOOSE_BUILD);
+    fs_mkdir(lib_dir);
+    fs_mkdir(obj_parent);
+    fs_mkdir(obj_dir);
+
+    if (build_transpile(cfg) != 0)
+        return -1;
+
+    char src_files[MAX_SRC_FILES][512];
+    int src_count = 0;
+    fs_collect_sources(cfg->src_dir, src_files, MAX_SRC_FILES, &src_count);
+
+    if (gen_dir && fs_exists(gen_dir)) {
+        int gen_count = 0;
+        fs_collect_sources(gen_dir, src_files + src_count,
+                           MAX_SRC_FILES - src_count, &gen_count);
+        src_count += gen_count;
+    }
+
+    if (src_count == 0) {
+        err("no source files for library %s", cfg->name);
+        return -1;
+    }
+
+    char pkg_files[MAX_SRC_FILES][512];
+    int pkg_count = 0;
+    collect_pkg_sources(cfg, pkg_files, MAX_SRC_FILES, &pkg_count);
+
+    char includes[4096];
+    build_include_flags(cfg, includes, sizeof(includes));
+    if (gen_dir && fs_exists(gen_dir)) {
+        int ioff = (int)strlen(includes);
+        snprintf(includes + ioff, sizeof(includes) - ioff, "-I%s ", gen_dir);
+    }
+
+    char pkg_defines[2048] = {0};
+    collect_pkg_defines(cfg, pkg_defines, sizeof(pkg_defines));
+
+    const char *mode_flags = release ? "-O2 -DNDEBUG" : "-g -DDEBUG";
+
+    /* compile each source to .o */
+    int idx = 0;
+    for (int i = 0; i < src_count; i++, idx++) {
+        char cmd[4096];
+        snprintf(cmd, sizeof(cmd), "%s %s %s %s %s -c '%s' -o '%s/%d.o'",
+                 cfg->cc, cfg->cflags, pkg_defines, mode_flags, includes,
+                 src_files[i], obj_dir, idx);
+        if (system(cmd) != 0) {
+            err("compile failed: %s", src_files[i]);
+            return -1;
+        }
+    }
+    for (int i = 0; i < pkg_count; i++, idx++) {
+        char cmd[4096];
+        snprintf(cmd, sizeof(cmd), "%s %s %s %s %s -c '%s' -o '%s/%d.o'",
+                 cfg->cc, cfg->cflags, pkg_defines, mode_flags, includes,
+                 pkg_files[i], obj_dir, idx);
+        if (system(cmd) != 0) {
+            err("compile failed: %s", pkg_files[i]);
+            return -1;
+        }
+    }
+
+    /* archive */
+    int total = src_count + pkg_count;
+    char lib_path[512];
+    snprintf(lib_path, sizeof(lib_path), "%s/lib%s.a", lib_dir, cfg->name);
+
+    char cmd[16384];
+    int off = snprintf(cmd, sizeof(cmd), "ar rcs '%s'", lib_path);
+    for (int i = 0; i < total; i++)
+        off += snprintf(cmd + off, sizeof(cmd) - off, " '%s/%d.o'", obj_dir, i);
+
+    info("Archiving", "lib%s.a", cfg->name);
+    fflush(stdout);
+    if (system(cmd) != 0) {
+        err("archive failed");
+        return -1;
+    }
+
+    info("Finished", "%s", lib_path);
     return 0;
 }
 
