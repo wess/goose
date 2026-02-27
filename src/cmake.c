@@ -14,6 +14,9 @@
 #define MAX_ARGS      128
 #define MAX_IF_DEPTH  16
 
+/* file-local build info pointer for cmake internal helpers */
+static CmakeBuildInfo *s_bi = NULL;
+
 typedef struct {
     char name[MAX_VAR_NAME];
     char value[MAX_VAR_VAL];
@@ -231,20 +234,21 @@ static void add_include(Config *cfg, const char *path) {
 }
 
 /* append to ldflags, space-separated */
-static void add_ldflag(Config *cfg, const char *flag) {
-    if (strstr(cfg->ldflags, flag) != NULL)
+static void add_ldflag(const char *flag) {
+    if (!s_bi) return;
+    if (strstr(s_bi->ldflags, flag) != NULL)
         return;
-    int len = (int)strlen(cfg->ldflags);
+    int len = (int)strlen(s_bi->ldflags);
     if (len > 0 && len < 254) {
-        cfg->ldflags[len] = ' ';
-        cfg->ldflags[len + 1] = '\0';
+        s_bi->ldflags[len] = ' ';
+        s_bi->ldflags[len + 1] = '\0';
         len++;
     }
-    strncat(cfg->ldflags, flag, 255 - len);
+    strncat(s_bi->ldflags, flag, 255 - len);
 }
 
 /* map library name to linker flag */
-static void map_lib_to_ldflag(Config *cfg, const char *lib) {
+static void map_lib_to_ldflag(const char *lib) {
     /* skip cmake keywords */
     if (strcmp(lib, "PUBLIC") == 0 || strcmp(lib, "PRIVATE") == 0 ||
         strcmp(lib, "INTERFACE") == 0 || strcmp(lib, "IMPORTED") == 0 ||
@@ -261,7 +265,7 @@ static void map_lib_to_ldflag(Config *cfg, const char *lib) {
     } else {
         snprintf(flag, sizeof(flag), "-l%s", lib);
     }
-    add_ldflag(cfg, flag);
+    add_ldflag(flag);
 }
 
 /* infer directory from a source file path */
@@ -655,7 +659,7 @@ static int parse_cmake_file(const char *cmake_path, const char *base_dir,
         /* ---- target_link_libraries() ---- */
         else if (istarts_with(cmd_name, "target_link_libraries") && argc > 1) {
             for (int i = 1; i < argc; i++)
-                map_lib_to_ldflag(cfg, args[i]);
+                map_lib_to_ldflag(args[i]);
         }
 
         /* ---- file(GLOB ...) / file(GLOB_RECURSE ...) ---- */
@@ -715,12 +719,12 @@ static int parse_cmake_file(const char *cmake_path, const char *base_dir,
                 /* add -DVAR to cflags */
                 char def[256];
                 snprintf(def, sizeof(def), "-D%s", var);
-                int cflen = (int)strlen(cfg->cflags);
+                int cflen = (int)strlen(s_bi->cflags);
                 if (cflen > 0 && cflen < 254) {
-                    cfg->cflags[cflen] = ' ';
-                    cfg->cflags[cflen + 1] = '\0';
+                    s_bi->cflags[cflen] = ' ';
+                    s_bi->cflags[cflen + 1] = '\0';
                 }
-                strncat(cfg->cflags, def, 255 - strlen(cfg->cflags));
+                strncat(s_bi->cflags, def, 255 - strlen(s_bi->cflags));
             } else {
                 var_set(vt, var, "0");
             }
@@ -772,12 +776,19 @@ static int parse_cmake_file(const char *cmake_path, const char *base_dir,
 
 /* ---- public API ---- */
 
-int cmake_to_config(const char *cmake_path, Config *cfg) {
-    config_default(cfg, "unnamed");
+int cmake_to_config(const char *cmake_path, Config *cfg, CmakeBuildInfo *bi) {
+    CmakeBuildInfo local_bi;
+    memset(&local_bi, 0, sizeof(local_bi));
+    if (bi)
+        s_bi = bi;
+    else
+        s_bi = &local_bi;
+
+    config_default(cfg, "unnamed", NULL);
     cfg->include_count = 0;
     cfg->source_count = 0;
-    cfg->cflags[0] = '\0';
-    cfg->ldflags[0] = '\0';
+    s_bi->cflags[0] = '\0';
+    s_bi->ldflags[0] = '\0';
 
     VarTable vt;
     memset(&vt, 0, sizeof(vt));
@@ -789,32 +800,64 @@ int cmake_to_config(const char *cmake_path, Config *cfg) {
     var_set(&vt, "CMAKE_CURRENT_BINARY_DIR", ".");
     var_set(&vt, "CMAKE_C_COMPILER", "cc");
 
-    if (parse_cmake_file(cmake_path, ".", cfg, &vt) != 0)
+    if (parse_cmake_file(cmake_path, ".", cfg, &vt) != 0) {
+        s_bi = NULL;
         return -1;
+    }
 
     /* ensure at least "." include if none found */
     if (cfg->include_count == 0)
         add_include(cfg, ".");
 
     /* prepend default cflags to any accumulated defines */
-    if (strlen(cfg->cflags) > 0) {
+    if (strlen(s_bi->cflags) > 0) {
         char existing[256];
-        strncpy(existing, cfg->cflags, 255);
+        strncpy(existing, s_bi->cflags, 255);
         existing[255] = '\0';
-        snprintf(cfg->cflags, 256, "-Wall -Wextra -std=c11 %s", existing);
+        snprintf(s_bi->cflags, 256, "-Wall -Wextra -std=c11 %s", existing);
     } else {
-        strncpy(cfg->cflags, "-Wall -Wextra -std=c11", 255);
+        strncpy(s_bi->cflags, "-Wall -Wextra -std=c11", 255);
     }
 
     /* add -lm as default for C projects (math library) */
-    add_ldflag(cfg, "-lm");
+    add_ldflag("-lm");
 
+    s_bi = NULL;
     return 0;
 }
 
 int cmake_convert_file(const char *cmake_path, const char *yaml_path) {
     Config cfg;
-    if (cmake_to_config(cmake_path, &cfg) != 0)
+    CmakeBuildInfo bi;
+    if (cmake_to_config(cmake_path, &cfg, &bi) != 0)
         return -1;
-    return config_save(yaml_path, &cfg);
+
+    /* write config with C-specific build fields */
+    FILE *f = fopen(yaml_path, "w");
+    if (!f) return -1;
+
+    fprintf(f, "project:\n");
+    fprintf(f, "  name: \"%s\"\n", cfg.name);
+    fprintf(f, "  version: \"%s\"\n", cfg.version);
+    fprintf(f, "  description: \"%s\"\n", cfg.description);
+    fprintf(f, "  author: \"%s\"\n", cfg.author);
+    fprintf(f, "  license: \"%s\"\n", cfg.license);
+    fprintf(f, "\nbuild:\n");
+    fprintf(f, "  cc: \"cc\"\n");
+    fprintf(f, "  cflags: \"%s\"\n", bi.cflags);
+    if (strlen(bi.ldflags) > 0)
+        fprintf(f, "  ldflags: \"%s\"\n", bi.ldflags);
+    if (strcmp(cfg.src_dir, "src") != 0)
+        fprintf(f, "  src_dir: \"%s\"\n", cfg.src_dir);
+    fprintf(f, "  includes:\n");
+    for (int i = 0; i < cfg.include_count; i++)
+        fprintf(f, "    - \"%s\"\n", cfg.includes[i]);
+    if (cfg.source_count > 0) {
+        fprintf(f, "  sources:\n");
+        for (int i = 0; i < cfg.source_count; i++)
+            fprintf(f, "    - \"%s\"\n", cfg.sources[i]);
+    }
+    fprintf(f, "\ndependencies:\n");
+    fclose(f);
+    return 0;
 }

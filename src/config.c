@@ -2,10 +2,11 @@
 #include <string.h>
 #include <yaml.h>
 #include "headers/config.h"
+#include "headers/framework.h"
 #include "headers/main.h"
 #include "headers/color.h"
 
-void config_default(Config *cfg, const char *name) {
+void config_default(Config *cfg, const char *name, GooseFramework *fw) {
     memset(cfg, 0, sizeof(Config));
     strncpy(cfg->name, name, MAX_NAME_LEN - 1);
     strncpy(cfg->version, "0.1.0", 63);
@@ -13,15 +14,15 @@ void config_default(Config *cfg, const char *name) {
     strncpy(cfg->author, "", MAX_NAME_LEN - 1);
     strncpy(cfg->license, "MIT", 63);
     strncpy(cfg->src_dir, "src", MAX_PATH_LEN - 1);
-    strncpy(cfg->cc, "cc", 63);
-    strncpy(cfg->cflags, "-Wall -Wextra -std=c11", 255);
-    strncpy(cfg->ldflags, "", 255);
     /* default include: src */
     strncpy(cfg->includes[0], "src", MAX_PATH_LEN - 1);
     cfg->include_count = 1;
     cfg->source_count = 0;
     cfg->dep_count = 0;
     cfg->plugin_count = 0;
+
+    if (fw && fw->on_config_defaults)
+        fw->on_config_defaults(cfg, fw->custom_data, fw->userdata);
 }
 
 /* --- YAML Loading --- */
@@ -31,14 +32,14 @@ typedef enum {
     S_WORKSPACE
 } Section;
 
-int config_load(const char *path, Config *cfg) {
+int config_load(const char *path, Config *cfg, GooseFramework *fw) {
     FILE *f = fopen(path, "r");
     if (!f) {
         err("cannot open %s (are you in a goose project?)", path);
         return -1;
     }
 
-    config_default(cfg, "unnamed");
+    config_default(cfg, "unnamed", fw);
 
     yaml_parser_t parser;
     yaml_event_t event;
@@ -204,14 +205,11 @@ int config_load(const char *path, Config *cfg) {
                     else if (strcmp(key, "command") == 0)
                         strncpy(cur_plugin->command, val, MAX_CMD_LEN - 1);
                 } else if (section == S_BUILD) {
-                    if (strcmp(key, "cc") == 0)
-                        strncpy(cfg->cc, val, 63);
-                    else if (strcmp(key, "cflags") == 0)
-                        strncpy(cfg->cflags, val, 255);
-                    else if (strcmp(key, "ldflags") == 0)
-                        strncpy(cfg->ldflags, val, 255);
-                    else if (strcmp(key, "src_dir") == 0)
+                    if (strcmp(key, "src_dir") == 0)
                         strncpy(cfg->src_dir, val, MAX_PATH_LEN - 1);
+                    else if (fw && fw->on_config_parse)
+                        fw->on_config_parse("build", key, val,
+                                            fw->custom_data, fw->userdata);
                 } else if (section == S_TASKS) {
                     if (cfg->task_count < MAX_TASKS) {
                         strncpy(cfg->tasks[cfg->task_count].name, key, MAX_NAME_LEN - 1);
@@ -237,7 +235,7 @@ int config_load(const char *path, Config *cfg) {
 
 /* --- YAML Saving --- */
 
-int config_save(const char *path, const Config *cfg) {
+int config_save(const char *path, const Config *cfg, const GooseFramework *fw) {
     FILE *f = fopen(path, "w");
     if (!f) {
         perror(path);
@@ -263,10 +261,9 @@ int config_save(const char *path, const Config *cfg) {
     fprintf(f, "\n");
 
     fprintf(f, "build:\n");
-    fprintf(f, "  cc: \"%s\"\n", cfg->cc);
-    fprintf(f, "  cflags: \"%s\"\n", cfg->cflags);
-    if (strlen(cfg->ldflags) > 0)
-        fprintf(f, "  ldflags: \"%s\"\n", cfg->ldflags);
+    /* delegate language-specific build fields to consumer callback */
+    if (fw && fw->on_config_write)
+        fw->on_config_write(f, fw->custom_data, fw->userdata);
     if (strcmp(cfg->src_dir, "src") != 0)
         fprintf(f, "  src_dir: \"%s\"\n", cfg->src_dir);
     fprintf(f, "  includes:\n");

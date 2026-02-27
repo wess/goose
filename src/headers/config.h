@@ -39,9 +39,6 @@ typedef struct {
     char author[MAX_NAME_LEN];
     char license[64];
     char src_dir[MAX_PATH_LEN];
-    char cc[64];
-    char cflags[256];
-    char ldflags[256];
     char includes[MAX_INCLUDES][MAX_PATH_LEN];
     int include_count;
     char sources[MAX_SRC_FILES][MAX_PATH_LEN];
@@ -57,8 +54,11 @@ typedef struct {
     int ws_member_count;
 } Config;
 
-int  config_load(const char *path, Config *cfg);
-int  config_save(const char *path, const Config *cfg);
-void config_default(Config *cfg, const char *name);
+/* forward declaration */
+typedef struct GooseFramework GooseFramework;
+
+int  config_load(const char *path, Config *cfg, GooseFramework *fw);
+int  config_save(const char *path, const Config *cfg, const GooseFramework *fw);
+void config_default(Config *cfg, const char *name, GooseFramework *fw);
 
 #endif

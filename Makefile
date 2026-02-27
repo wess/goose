@@ -12,7 +12,8 @@ YAML_OBJ = $(YAML_SRC:libs/libyaml/src/%.c=$(OBJDIR)/yaml_%.o)
 
 SRC      = $(filter-out src/main.c, $(wildcard src/*.c))
 CMD_SRC  = $(wildcard src/cmd/*.c)
-LIB_OBJ  = $(SRC:src/%.c=$(OBJDIR)/%.o) $(CMD_SRC:src/cmd/%.c=$(OBJDIR)/cmd/%.o) $(YAML_OBJ)
+CC_SRC   = $(wildcard src/cc/*.c)
+LIB_OBJ  = $(SRC:src/%.c=$(OBJDIR)/%.o) $(CMD_SRC:src/cmd/%.c=$(OBJDIR)/cmd/%.o) $(CC_SRC:src/cc/%.c=$(OBJDIR)/cc/%.o) $(YAML_OBJ)
 CLI_OBJ  = $(OBJDIR)/main.o
 
 LIB      = $(BUILD)/libgoose.a
@@ -40,6 +41,9 @@ $(OBJDIR)/%.o: src/%.c | $(OBJDIR)
 $(OBJDIR)/cmd/%.o: src/cmd/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(OBJDIR)/cc/%.o: src/cc/%.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 YAML_DEFS = -DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 \
             -DYAML_VERSION_STRING=\"0.2.5\"
 
@@ -47,7 +51,7 @@ $(OBJDIR)/yaml_%.o: libs/libyaml/src/%.c | $(OBJDIR)
 	$(CC) $(YAML_DEFS) -Ilibs/libyaml/include -Ilibs/libyaml/src -w -c $< -o $@
 
 $(OBJDIR):
-	mkdir -p $(OBJDIR) $(OBJDIR)/cmd
+	mkdir -p $(OBJDIR) $(OBJDIR)/cmd $(OBJDIR)/cc
 
 clean:
 	rm -rf $(BUILD)

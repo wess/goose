@@ -4,6 +4,7 @@
 #include "headers/main.h"
 #include "headers/color.h"
 #include "headers/config.h"
+#include "headers/framework.h"
 #include "headers/build.h"
 #include "headers/pkg.h"
 #include "headers/fs.h"

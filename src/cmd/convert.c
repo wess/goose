@@ -3,13 +3,13 @@
 #include "../headers/cmd.h"
 #include "../headers/cmake.h"
 #include "../headers/config.h"
-#include "../headers/main.h"
+#include "../headers/framework.h"
 #include "../headers/color.h"
 #include "../headers/fs.h"
 
-int cmd_convert(int argc, char **argv) {
+int cmd_convert(int argc, char **argv, GooseFramework *fw) {
     const char *cmake_path = "CMakeLists.txt";
-    const char *yaml_path = GOOSE_CONFIG;
+    const char *yaml_path = fw->config_file;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--input") == 0 && i + 1 < argc)
@@ -33,24 +33,9 @@ int cmd_convert(int argc, char **argv) {
 
     info("Converting", "%s", cmake_path);
 
-    Config cfg;
-    if (cmake_to_config(cmake_path, &cfg) != 0)
-        return 1;
-
-    /* show what we extracted */
-    info("Name", "%s", cfg.name);
-    info("Version", "%s", cfg.version);
-    if (strcmp(cfg.src_dir, "src") != 0)
-        info("Source", "%s", cfg.src_dir);
-    for (int i = 0; i < cfg.include_count; i++)
-        info("Include", "%s", cfg.includes[i]);
-    if (strlen(cfg.ldflags) > 0)
-        info("Ldflags", "%s", cfg.ldflags);
-    if (cfg.source_count > 0)
-        info("Sources", "%d files", cfg.source_count);
-
-    if (config_save(yaml_path, &cfg) != 0) {
-        err("failed to write %s", yaml_path);
+    /* cmake_convert_file writes the file directly with C-specific fields */
+    if (cmake_convert_file(cmake_path, yaml_path) != 0) {
+        err("failed to convert %s", cmake_path);
         return 1;
     }
 

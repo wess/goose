@@ -3,7 +3,13 @@
 
 #include "config.h"
 
-int cmake_to_config(const char *cmake_path, Config *cfg);
+/* cflags/ldflags output for C-specific cmake conversion */
+typedef struct {
+    char cflags[256];
+    char ldflags[256];
+} CmakeBuildInfo;
+
+int cmake_to_config(const char *cmake_path, Config *cfg, CmakeBuildInfo *bi);
 int cmake_convert_file(const char *cmake_path, const char *yaml_path);
 
 #endif

@@ -6,9 +6,5 @@
 #else
 #define GOOSE_VERSION "0.0.0"
 #endif
-#define GOOSE_CONFIG  "goose.yaml"
-#define GOOSE_LOCK    "goose.lock"
-#define GOOSE_PKG_DIR "packages"
-#define GOOSE_BUILD   "build"
 
 #endif

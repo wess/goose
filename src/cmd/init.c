@@ -4,15 +4,15 @@
 #include <unistd.h>
 #include "../headers/cmd.h"
 #include "../headers/config.h"
+#include "../headers/framework.h"
 #include "../headers/fs.h"
-#include "../headers/main.h"
 #include "../headers/color.h"
 
-int cmd_init(int argc, char **argv) {
+int cmd_init(int argc, char **argv, GooseFramework *fw) {
     (void)argc; (void)argv;
 
-    if (fs_exists(GOOSE_CONFIG)) {
-        err("%s already exists in this directory", GOOSE_CONFIG);
+    if (fs_exists(fw->config_file)) {
+        err("%s already exists in this directory", fw->config_file);
         return 1;
     }
 
@@ -25,31 +25,27 @@ int cmd_init(int argc, char **argv) {
     char *name = basename(cwd);
 
     Config cfg;
-    config_default(&cfg, name);
+    config_default(&cfg, name, fw);
 
     fs_mkdir(cfg.src_dir);
 
+    /* use consumer init template if available, otherwise write default */
     char main_path[512];
-    snprintf(main_path, sizeof(main_path), "%s/main.c", cfg.src_dir);
+    snprintf(main_path, sizeof(main_path), "%s/%s", cfg.src_dir, fw->init_filename);
     if (!fs_exists(main_path)) {
-        char content[512];
-        snprintf(content, sizeof(content),
-            "#include <stdio.h>\n\n"
-            "int main(void) {\n"
-            "    printf(\"Hello from %s!\\n\");\n"
-            "    return 0;\n"
-            "}\n", name);
-        fs_write_file(main_path, content);
+        if (fw->on_init_template) {
+            fw->on_init_template(cfg.src_dir, name, fw->userdata);
+        }
     }
 
-    config_save(GOOSE_CONFIG, &cfg);
-    info("Created", "goose project '%s'", name);
+    config_save(fw->config_file, &cfg, fw);
+    info("Created", "%s project '%s'", fw->tool_name, name);
     return 0;
 }
 
-int cmd_new(int argc, char **argv) {
+int cmd_new(int argc, char **argv, GooseFramework *fw) {
     if (argc < 2) {
-        err("usage: goose new <name>");
+        err("usage: %s new <name>", fw->tool_name);
         return 1;
     }
 
@@ -67,28 +63,27 @@ int cmd_new(int argc, char **argv) {
     fs_mkdir(path);
 
     Config cfg;
-    config_default(&cfg, name);
+    config_default(&cfg, name, fw);
 
     char cfg_path[512];
-    snprintf(cfg_path, sizeof(cfg_path), "%s/%s", name, GOOSE_CONFIG);
-    config_save(cfg_path, &cfg);
+    snprintf(cfg_path, sizeof(cfg_path), "%s/%s", name, fw->config_file);
+    config_save(cfg_path, &cfg, fw);
 
-    snprintf(path, sizeof(path), "%s/src/main.c", name);
-    char content[512];
-    snprintf(content, sizeof(content),
-        "#include <stdio.h>\n\n"
-        "int main(void) {\n"
-        "    printf(\"Hello from %s!\\n\");\n"
-        "    return 0;\n"
-        "}\n", name);
-    fs_write_file(path, content);
+    /* use consumer init template */
+    if (fw->on_init_template) {
+        char src_path[512];
+        snprintf(src_path, sizeof(src_path), "%s/src", name);
+        fw->on_init_template(src_path, name, fw->userdata);
+    }
 
     snprintf(path, sizeof(path), "%s/.gitignore", name);
-    fs_write_file(path,
-        "build/\n"
-        "packages/\n"
-        "goose.lock\n");
+    char gitignore[2048];
+    snprintf(gitignore, sizeof(gitignore),
+        "%s/\n%s/\n%s\n%s",
+        fw->build_dir, fw->pkg_dir, fw->lock_file,
+        fw->gitignore_extra);
+    fs_write_file(path, gitignore);
 
-    info("Created", "new goose project '%s'", name);
+    info("Created", "new %s project '%s'", fw->tool_name, name);
     return 0;
 }

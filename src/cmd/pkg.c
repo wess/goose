@@ -2,19 +2,20 @@
 #include <string.h>
 #include "../headers/cmd.h"
 #include "../headers/config.h"
+#include "../headers/framework.h"
 #include "../headers/pkg.h"
 #include "../headers/lock.h"
-#include "../headers/main.h"
 #include "../headers/color.h"
 
-int cmd_add(int argc, char **argv) {
+int cmd_add(int argc, char **argv, GooseFramework *fw) {
     if (argc < 2) {
-        err("usage: goose add <git-url> [--name <name>] [--version <tag>]");
+        err("usage: %s add <git-url> [--name <name>] [--version <tag>]",
+            fw->tool_name);
         return 1;
     }
 
     Config cfg;
-    if (config_load(GOOSE_CONFIG, &cfg) != 0)
+    if (config_load(fw->config_file, &cfg, fw) != 0)
         return 1;
 
     const char *git_url = argv[1];
@@ -53,25 +54,25 @@ int cmd_add(int argc, char **argv) {
     info("Adding", "%s", name);
 
     LockFile lf;
-    lock_load(GOOSE_LOCK, &lf);
+    lock_load(fw->lock_file, &lf);
 
-    if (pkg_fetch(dep, GOOSE_PKG_DIR, &lf) != 0)
+    if (pkg_fetch(dep, fw->pkg_dir, &lf, fw) != 0)
         return 1;
 
-    lock_save(GOOSE_LOCK, &lf);
-    config_save(GOOSE_CONFIG, &cfg);
-    info("Added", "%s to %s", name, GOOSE_CONFIG);
+    lock_save(fw->lock_file, &lf);
+    config_save(fw->config_file, &cfg, fw);
+    info("Added", "%s to %s", name, fw->config_file);
     return 0;
 }
 
-int cmd_remove(int argc, char **argv) {
+int cmd_remove(int argc, char **argv, GooseFramework *fw) {
     if (argc < 2) {
-        err("usage: goose remove <name>");
+        err("usage: %s remove <name>", fw->tool_name);
         return 1;
     }
 
     Config cfg;
-    if (config_load(GOOSE_CONFIG, &cfg) != 0)
+    if (config_load(fw->config_file, &cfg, fw) != 0)
         return 1;
 
     const char *name = argv[1];
@@ -85,37 +86,37 @@ int cmd_remove(int argc, char **argv) {
     }
 
     if (found < 0) {
-        err("dependency '%s' not found in %s", name, GOOSE_CONFIG);
+        err("dependency '%s' not found in %s", name, fw->config_file);
         return 1;
     }
 
-    pkg_remove(name, GOOSE_PKG_DIR);
+    pkg_remove(name, fw->pkg_dir);
 
     for (int i = found; i < cfg.dep_count - 1; i++)
         cfg.deps[i] = cfg.deps[i + 1];
     cfg.dep_count--;
 
-    config_save(GOOSE_CONFIG, &cfg);
-    info("Removed", "%s from %s", name, GOOSE_CONFIG);
+    config_save(fw->config_file, &cfg, fw);
+    info("Removed", "%s from %s", name, fw->config_file);
     return 0;
 }
 
-int cmd_update(int argc, char **argv) {
+int cmd_update(int argc, char **argv, GooseFramework *fw) {
     (void)argc; (void)argv;
 
     Config cfg;
-    if (config_load(GOOSE_CONFIG, &cfg) != 0)
+    if (config_load(fw->config_file, &cfg, fw) != 0)
         return 1;
 
     info("Updating", "%s dependencies", cfg.name);
 
     LockFile lf;
-    lock_load(GOOSE_LOCK, &lf);
+    lock_load(fw->lock_file, &lf);
 
-    if (pkg_update_all(&cfg, &lf) != 0)
+    if (pkg_update_all(&cfg, &lf, fw) != 0)
         return 1;
 
-    lock_save(GOOSE_LOCK, &lf);
-    info("Updated", "lock file written to %s", GOOSE_LOCK);
+    lock_save(fw->lock_file, &lf);
+    info("Updated", "lock file written to %s", fw->lock_file);
     return 0;
 }

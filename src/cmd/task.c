@@ -2,19 +2,19 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-#include "headers/config.h"
-#include "headers/main.h"
-#include "headers/color.h"
-#include "headers/cmd.h"
+#include "../headers/cmd.h"
+#include "../headers/config.h"
+#include "../headers/framework.h"
+#include "../headers/color.h"
 
-int cmd_task(int argc, char **argv) {
+int cmd_task(int argc, char **argv, GooseFramework *fw) {
     Config cfg;
-    if (config_load(GOOSE_CONFIG, &cfg) != 0)
+    if (config_load(fw->config_file, &cfg, fw) != 0)
         return 1;
 
     if (argc < 2) {
         if (cfg.task_count == 0) {
-            info("Tasks", "none defined in %s", GOOSE_CONFIG);
+            info("Tasks", "none defined in %s", fw->config_file);
             return 0;
         }
         printf("Available tasks:\n");
