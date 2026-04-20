@@ -2,40 +2,49 @@
 
 ## Project Overview
 
-Goose — a Cargo-inspired package manager and build tool for C. Uses `goose.yaml` for project configuration, `goose.lock` for reproducible dependency pinning, git URLs or local paths for package sources, and named tasks for shell commands. Also builds as a static library (`libgoose.a`) for embedding into other tools. Version is read from the `VERSION` file at build time.
+Goose — a Cargo-inspired package manager and build tool. The core is a **generic, language-agnostic framework** (`libgoose.a`) with C wired up as the first consumer plugin in `src/cc/`. Consumers can build a Cargo-like tool for any language by supplying a `GooseFramework` with the right callbacks. Uses `goose.yaml` for project configuration, `goose.lock` for reproducible dependency pinning, git URLs or local paths for package sources, and named tasks for shell commands. Version is read from the `VERSION` file at build time.
 
 ## Project Structure
 
 ```
 src/
-  main.c              — entry point, CLI command dispatch table
-  config.c            — YAML parsing/writing of goose.yaml (uses libyaml)
-  build.c             — compilation: source collection, plugin transpilation, include/define/ldflag aggregation, cc invocation
-  pkg.c               — package ops: git clone/pull/remove, transitive dep resolution, lock sync
+  main.c              — 10-line entry: zero a GooseFramework, goose_c_setup(&fw), goose_main(&fw, argc, argv)
+  framework.c         — GooseFramework lifecycle, field setters, callback registration, command dispatch (goose_main), built-in verb table, task-name fallback
+  config.c            — YAML parser/writer for goose.yaml. Known keys handled inline; unknown build:/project: keys fan out via fw->on_config_parse / on_config_write
+  build.c             — shared build helpers (language-agnostic): build_dep_base, build_collect_pkg_sources, build_include_flags, build_transpile
+  pkg.c               — package ops: git clone/pull/remove, transitive dep resolution, lock-SHA sync, on_pkg_convert hook for non-native packages
   fs.c                — filesystem helpers: mkdir, exists, rmrf, write_file, recursive .c/.ext collection
   lock.c              — goose.lock read/write/lookup (TOML-like [[package]] format)
-  cmake.c             — CMakeLists.txt to goose.yaml converter (variable table, if/else, subdirectories)
+  cmake.c             — CMakeLists.txt → goose.yaml converter (~820 LOC; variable table, if/else, add_subdirectory recursion)
   cmd/
-    init.c            — goose init, goose new
-    build.c           — goose build, goose run, goose clean, goose test, goose install
+    init.c            — goose init, goose new (calls fw->on_init_template for language-specific starter files)
+    build.c           — goose build, goose run, goose clean, goose test, goose install (generic — loads config, resolves deps, then delegates to fw->on_build/on_run/on_test/on_install)
     pkg.c             — goose add, goose remove, goose update
     convert.c         — goose convert (CMake to goose.yaml)
     task.c            — goose task (list/run named tasks from goose.yaml)
+  cc/                 — C language consumer plugin (wires framework to cc toolchain)
+    setup.c           — goose_c_setup: registers all c_* callbacks, sets tool_name=goose, config_file=goose.yaml, pkg_dir=packages, etc.
+    setup.h           — public entry for consumer setup
+    config.c          — CConfig parse/write/defaults callbacks (cc, cflags, ldflags stored in fw->custom_data)
+    config.h          — CConfig struct (language-specific build fields)
+    build.c           — c_build, c_test, c_run, c_install, c_clean, c_transpile (the actual compile/link/test drivers)
+    init.c            — c_init_template (default main.c), c_pkg_convert (CMakeLists.txt detection + convert)
   headers/
-    main.h            — version macro, path constants (GOOSE_CONFIG, GOOSE_LOCK, GOOSE_PKG_DIR, GOOSE_BUILD)
+    main.h            — GOOSE_VERSION macro (from VERSION file via -DGOOSE_VERSION_FROM_FILE)
+    framework.h       — GooseFramework struct, callback typedefs, FFI API (goose_framework_new/free, goose_main, setters, on_* registrars, add_command, userdata)
     config.h          — Config/Dependency/Task/Plugin structs, limits (MAX_DEPS=64, MAX_SRC_FILES=256, MAX_INCLUDES=32, MAX_PLUGINS=16, MAX_TASKS=32, MAX_WS_MEMBERS=32), workspace fields (type, ws_members, ws_member_count)
-    build.h           — build_project(), build_project_at(), build_library(), build_transpile(), build_clean()
+    build.h           — build_transpile(), build_include_flags(), build_collect_pkg_sources(), build_dep_base() — shared helpers consumed by language-specific build callbacks
     pkg.h             — pkg_fetch(), pkg_remove(), pkg_fetch_all(), pkg_update_all(), pkg_name_from_git(), pkg_get_sha()
     fs.h              — fs_mkdir(), fs_exists(), fs_rmrf(), fs_write_file(), fs_collect_sources(), fs_collect_ext()
     lock.h            — LockFile/LockEntry structs, lock_load/save/find_sha/update_entry
     cmake.h           — cmake_to_config(), cmake_convert_file()
     color.h           — ANSI color macros, info()/warn()/err() logging macros, TTY detection
-    cmd.h             — all cmd_* function declarations
+    cmd.h             — all cmd_* function declarations (signature: int cmd_*(int argc, char **argv, GooseFramework *fw))
 include/
   goose.h             — public library header, re-exports all internal headers for libgoose.a consumers
 libs/libyaml/         — vendored libyaml 0.2.5 (compiled from source, no system dependency needed)
 examples/             — example projects (mathapp, mathlib, stringlib, gdexample)
-docs/                 — user-facing documentation (getting-started, commands, configuration, dependencies, creating-packages)
+docs/                 — user-facing documentation (getting-started, commands, configuration, dependencies, creating-packages, plugins, library)
 ```
 
 ## Build
@@ -47,9 +56,7 @@ make cli              # builds only build/goose (CLI binary)
 make clean            # removes build/
 ```
 
-libyaml is vendored in `libs/libyaml/` and compiled directly — no system install required. The Makefile compiles all `src/*.c` and `src/cmd/*.c` with `-std=c11 -Wall -Wextra`. Version is injected via `-DGOOSE_VERSION_FROM_FILE` from the `VERSION` file.
-
-The CLI binary links against `libgoose.a`. Object files go to `build/obj/` and `build/obj/cmd/`.
+libyaml is vendored in `libs/libyaml/` and compiled directly — no system install required. The Makefile compiles `src/*.c`, `src/cmd/*.c`, and `src/cc/*.c` with `-std=c11 -Wall -Wextra`. Everything except `main.c` goes into `libgoose.a` (framework core + C consumer plugin + libyaml). The CLI binary is just `main.o` linked against the static lib. Version is injected via `-DGOOSE_VERSION_FROM_FILE` from the `VERSION` file. Object files go to `build/obj/`, `build/obj/cmd/`, `build/obj/cc/`.
 
 ## Install
 
@@ -131,33 +138,38 @@ TOML-like format with `[[package]]` sections, each containing `name`, `git`, `sh
 
 ## Key Architecture Details
 
-**Dependency resolution**: `pkg_fetch()` clones git deps with `--depth 1`. Path deps (`dep->path[0]` set) skip all git operations — goose validates the path exists and resolves transitive deps from the local `goose.yaml`. If a git package has a `goose.yaml` with deps, it recursively fetches transitive dependencies. If a package only has `CMakeLists.txt`, it auto-converts to `goose.yaml` via `cmake_convert_file()`. Lock file SHAs are checked on every build — if current HEAD differs from locked SHA, it checks out the locked revision. `pkg_update_all()` skips path deps.
+**Framework/consumer split**: The framework core (`src/*.c`, `src/cmd/*.c`) knows nothing about C specifically. It exposes a `GooseFramework` struct holding tool identity (name, version, config_file, pkg_dir, build_dir, etc.), an 8 KB `custom_data[]` scratch buffer for language-specific config, and 11 callback slots: `on_build`, `on_test`, `on_run`, `on_install`, `on_clean`, `on_transpile`, `on_init_template`, `on_config_defaults`, `on_config_parse`, `on_config_write`, `on_pkg_convert`. Consumers also register extra CLI verbs via `goose_framework_add_command()` (up to 32). `src/cc/` is the reference C consumer; its `goose_c_setup()` binds `c_build`, `c_test`, etc. and stashes a `CConfig {cc, cflags, ldflags}` in `fw->custom_data`. `fw->userdata` is set to `fw` itself in `goose_c_setup` so callbacks can fetch the framework back from the opaque `void *userdata` parameter.
 
-**Path dependency resolution**: `dep_base()` helper in `build.c` returns `dep->path` for path deps or `GOOSE_PKG_DIR/dep->name` for git deps. All source/include/ldflag/define collection functions use `dep_base()` to resolve the correct base directory.
+**Command dispatch** (`framework.c`): `goose_main()` matches `argv[1]` against a static `builtins[]` table (new, init, build, run, test, clean, add, remove, update, install, convert, task), then consumer-registered `extra_cmds[]`, then falls back to task-name lookup in `goose.yaml`. All built-in `cmd_*` functions load the config via `config_load(fw->config_file, &cfg, fw)`, call `pkg_fetch_all` with `fw->lock_file`, and delegate to the registered callback — no language-specific code lives in `cmd/`.
 
-**Build pipeline**: `build_project()` calls `build_project_at()` with default gen_dir (`build/gen`). `build_project_at()` runs `build_transpile()` first (processes plugins), then collects project sources from `src_dir`, generated sources from the provided `gen_dir`, and package sources (prefers explicit `sources` list from package `goose.yaml`, falls back to recursive `.c` collection). Assembles include flags from both project and package configs, collects `-D` defines and ldflags from package cflags, then invokes `cc` as a single compilation command. Debug builds use `-g -DDEBUG`, release uses `-O2 -DNDEBUG`. Output goes to `build/debug/` or `build/release/`.
+**Config parsing** (`config.c`): YAML parsed via libyaml. Known sections: `workspace`, `project`, `build`, `dependencies`, `plugins`, `tasks`. For the `build:` section, only `src_dir` is handled inline; every other key is delegated to `fw->on_config_parse("build", key, val, custom_data, userdata)`. `config_save` writes generic fields then calls `fw->on_config_write(f, custom_data, userdata)` to emit language-specific fields. `config_default` calls `fw->on_config_defaults` last so defaults are filled in after the zeroed state.
 
-**Library builds**: `build_library()` compiles each source file to an individual `.o` in `build/obj/{name}/`, then archives all objects with `ar rcs build/lib/lib{name}.a`. Used by workspace builds for `type: "lib"` members.
+**Dependency resolution** (`pkg.c`): `pkg_fetch()` clones git deps with `--depth 1`. Path deps (`dep->path[0]` set) skip all git operations — goose validates the path exists and recurses into the sub-package's `goose.yaml`. If a git package has a `goose.yaml`, transitive deps are fetched recursively. After fetch, `fw->on_pkg_convert(dest, config_file, userdata)` runs — the C consumer uses this to auto-convert `CMakeLists.txt` into `goose.yaml` via `cmake_convert_file()`. Lock-file SHAs are checked on every build: if current HEAD differs from locked SHA, `checkout_sha` fetches origin and checks out the locked revision. `pkg_update_all()` skips path deps.
 
-**Workspace support**: Config supports `workspace.members` (list of member directory paths) and `project.type` ("lib" for libraries). `config_load` parses the `workspace:` section with `members:` sequence. `config_save` writes the workspace section when `ws_member_count > 0`.
+**Path dependency resolution**: `build_dep_base()` in `build.c` returns `dep->path` for path deps or `{pkg_dir}/{dep->name}` for git deps. All source/include/ldflag/define collection in `src/build.c` and `src/cc/build.c` goes through it.
 
-**Plugin/transpile system**: `build_transpile()` iterates plugins defined in `goose.yaml`, collects files matching each plugin's `ext`, and runs the plugin `command` on each file, writing output to `build/gen/`. Generated `.c` files are included in the main compilation.
+**C build pipeline** (`src/cc/build.c`): `c_build` reads `CConfig` from `fw->custom_data`, runs `build_transpile()` (plugins → `build/gen/`), collects project sources via `fs_collect_sources(cfg->src_dir)`, appends generated sources, appends package sources (prefers explicit `sources:` list in each package's `goose.yaml`, else recursive `.c` scan of `src/` or package root), builds include flags via `build_include_flags()`, extracts `-D` defines and ldflags from each package's own `CConfig`, then invokes `cc` as a single command. Debug: `-g -DDEBUG` → `build/debug/{name}`. Release: `-O2 -DNDEBUG` → `build/release/{name}`.
 
-**Task system**: Tasks are simple name-to-command mappings in `goose.yaml`. `cmd_task()` lists or runs them. Unknown commands in `main()` fall back to task name lookup before erroring.
+**Workspace support**: Config parses/saves `workspace.members` and `project.type`. The current C build callback does **not** walk workspace members or build `type: "lib"` as an archive — only the current project is built. Workspace dispatch is wired at the schema level but not yet implemented in `c_build`.
 
-**CMake converter** (`cmake.c`): A substantial (~820 line) recursive-descent parser that handles `project()`, `set()`, `list(APPEND)`, `option()`, `add_library()`, `add_executable()`, `include_directories()`, `target_include_directories()`, `target_link_libraries()`, `file(GLOB)`, `add_subdirectory()` (recursive), `CHECK_INCLUDE_FILE()`, and `if()/elseif()/else()/endif()` with variable expansion and generator expression stripping.
+**Plugin/transpile system**: `build_transpile()` iterates `cfg->plugins[]`, collects files matching each plugin's `ext` from `cfg->src_dir`, and runs the plugin `command` on each (`'{command}' '{file}' > 'build/gen/{stem}.c'`). Generated `.c` files are picked up by the main compile.
 
-**Test runner**: Compiles each `.c` file in `tests/` as a standalone binary, linking against project sources (minus `main.c`) and package sources. Reports PASS/FAIL per test file.
+**Task system**: Tasks are name→command mappings in `goose.yaml`. `cmd_task` lists (no arg) or runs a specific one. If `goose_main` finds no matching built-in or extra command, it loads the config and checks task names — so `goose demo` runs task `demo` directly.
 
-**Library mode**: All source files (except `main.c`) are compiled into `libgoose.a`. Users can `#include <goose/goose.h>` and link against the static library to call `config_load()`, `pkg_fetch()`, `build_project()`, etc. directly.
+**CMake converter** (`cmake.c`, ~820 LOC): Hand-rolled recursive-descent parser. Handles `project()`, `set()`, `list(APPEND)`, `option()`, `add_library()`, `add_executable()`, `include_directories()`, `target_include_directories()`, `target_link_libraries()`, `file(GLOB)`, `add_subdirectory()` (recursive), `CHECK_INCLUDE_FILE()`, and `if()/elseif()/else()/endif()` with variable expansion and `$<...>` generator-expression stripping. Called from `cmd_convert` (explicit) and `c_pkg_convert` (auto-invoked after fetching a package without `goose.yaml`).
+
+**Test runner** (`c_test`): Compiles each `.c` in `fw->test_dir` (default `tests/`) as a standalone binary, linking against project sources (excluding `main.c`) + all package sources + both project and package include paths/ldflags. Reports PASS/FAIL per test.
+
+**Library mode**: Everything except `src/main.c` is archived into `libgoose.a`. Consumers `#include <goose/goose.h>` and link against the static library to build their own Cargo-like tool. Typical consumer pattern: `goose_framework_new()` → set identity + callbacks → `goose_main(fw, argc, argv)`. See `src/main.c` for the minimal form and `src/cc/setup.c` for a full callback wiring.
 
 ## Code Conventions
 
 - Pure C11, no C++ or external dependencies beyond libyaml (vendored)
-- Fixed-size buffers throughout (no malloc), stack-allocated structs
-- Shell commands via `system()` and `popen()` for git operations and rm
-- All logging through `info()`/`warn()`/`err()` macros with 12-char right-aligned tags
-- Command functions follow `int cmd_*(int argc, char **argv)` signature, return 0 on success
+- Fixed-size buffers throughout (mostly stack-allocated; `goose_framework_new` is the lone `calloc`)
+- Shell commands via `system()` and `popen()` for git/rm; paths quoted with single quotes (paths containing `'` will break)
+- All logging through `info()`/`warn()`/`err()` macros with 12-char right-aligned tags; colors suppressed when stdout/stderr isn't a TTY
+- Built-in command functions: `int cmd_*(int argc, char **argv, GooseFramework *fw)` — return 0 on success
+- Consumer callbacks receive an opaque `void *userdata`; the C consumer sets `fw->userdata = fw` so callbacks can reach `fw->custom_data`
 - Config structs passed by pointer, never heap-allocated
 
 ## CI/CD

@@ -18,7 +18,7 @@ Goose handles project scaffolding, dependency management, building, testing, and
 - **Plugin system** -- Custom transpilers for `.l`, `.y`, or any file extension
 - **CMake conversion** -- Auto-converts `CMakeLists.txt` packages to `goose.yaml`
 - **Install command** -- Build and install binaries to your system
-- **Library mode** -- Use goose as a static library (`libgoose.a`) to build your own tools
+- **Library mode** -- `libgoose.a` is a generic framework. Build your own tool on top of `goose.yaml`, or wire up a Cargo-like package manager for a different language via callbacks
 
 ## Install
 
@@ -319,8 +319,7 @@ build:
 dependencies:
 ```
 
-Push to GitHub and share:
-> Coming soon
+Push to GitHub and tell others to:
 
 ```sh
 goose add https://github.com/you/mylib.git
@@ -344,7 +343,7 @@ plugins:
 
 During `goose build`, files matching each extension are found in `src/` and run through the command. Output `.c` files are placed in `build/gen/` and compiled into the final binary.
 
-See [Plugins](docs/plugins.md) for details.
+See [Plugins](docs/packagemanager/plugins.md) for details.
 
 ## Project Structure
 
@@ -374,17 +373,31 @@ The `examples/` directory contains:
 - **`mathlib/`** -- A math utility library demonstrating the `include/` + `src/` package convention
 - **`stringlib/`** -- A string utility library with trim, upper/lower, starts/ends with
 - **`mathapp/`** -- An application that depends on both libraries, with tests
+- **`gdexample/`** -- An application depending on libgd (a CMake package; goose auto-converts the manifest on fetch)
 
 ## Using Goose as a Library
 
-Goose can also be used as a C library. The build produces `libgoose.a` and installs headers to `include/goose/`.
+Goose ships as both a CLI and a static library. `libgoose.a` is the framework itself — YAML parsing, dependency resolution, lock files, the CMake converter, the CLI dispatch loop. Use it to build small tools on top of `goose.yaml`, or to build a Cargo-like package manager for another language.
+
+Minimal audit tool:
 
 ```c
 #include <goose/goose.h>
 
-Config cfg;
-config_load("goose.yaml", &cfg);
-build_project(&cfg, 0);  // 0 = debug, 1 = release
+int main(void) {
+    Config cfg;
+    if (config_load("goose.yaml", &cfg, NULL) != 0)
+        return 1;
+
+    printf("%s v%s (%d deps)\n", cfg.name, cfg.version, cfg.dep_count);
+    return 0;
+}
+```
+
+Compile:
+
+```sh
+cc audit.c -I/usr/local/include -L/usr/local/lib -lgoose -o audit
 ```
 
 To depend on goose as a library from another goose project:
@@ -395,7 +408,7 @@ dependencies:
     path: "libs/goose"
 ```
 
-The `make install` target installs the binary, static library, and headers:
+`make install` drops everything into place:
 
 ```sh
 make install PREFIX=~/.local
@@ -406,19 +419,28 @@ make install PREFIX=~/.local
 #   ~/.local/include/goose/headers/*.h
 ```
 
-See [Using libgoose.a](docs/library.md) for a full tutorial.
+See [the library docs](docs/library/index.md) for the full framework API — `GooseFramework`, the 11 callbacks, and worked examples including a toy Rust frontend.
 
 ## Documentation
 
-Full documentation is in the [docs/](docs/) directory:
+Full documentation lives under [`docs/`](docs/index.md), split by audience:
 
-- [Getting Started](docs/getting-started.md)
-- [Configuration Reference](docs/configuration.md)
-- [Dependencies](docs/dependencies.md)
-- [Creating Packages](docs/creating-packages.md)
-- [Command Reference](docs/commands.md)
-- [Plugins](docs/plugins.md)
-- [Using libgoose.a](docs/library.md)
+**Package manager (CLI users):**
+
+- [Getting Started](docs/packagemanager/start.md)
+- [Commands](docs/packagemanager/commands.md)
+- [Configuration](docs/packagemanager/configuration.md)
+- [Dependencies](docs/packagemanager/dependencies.md)
+- [Authoring Packages](docs/packagemanager/packages.md)
+- [Plugins](docs/packagemanager/plugins.md)
+
+**Library (tool builders, language plugin authors):**
+
+- [Overview](docs/library/index.md)
+- [Quickstart](docs/library/start.md)
+- [Framework](docs/library/framework.md)
+- [API Reference](docs/library/api.md)
+- [Examples](docs/library/examples.md)
 
 ## License
 

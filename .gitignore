@@ -1,8 +1,13 @@
+# goose build output
 build/
-packages/
-# Created by https://www.toptal.com/developers/gitignore/api/macos,linux,visualstudiocode,vim,cmake,autotools
-# Edit at https://www.toptal.com/developers/gitignore?templates=macos,linux,visualstudiocode,vim,cmake,autotools
+builds/
+obj/
+/goose
+*.o
+*.a
 
+# fetched dependencies
+packages/
 CLAUDE.md
 
 ### CMake ###
