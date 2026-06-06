@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documentation — Goose</title>
+    <meta name="description" content="Documentation for Goose: getting started, commands, configuration, dependencies, authoring packages, plugins, and the libgoose.a framework API." />
+    <link rel="stylesheet" href="styles.css" />
+    <style>:root{--accent:#e8a33d;--accent2:#c2410c}</style>
+  </head>
+  <body>
+    <nav class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><span class="mark">🦢</span> Goose</a>
+        <button class="navtoggle" aria-label="Menu" data-nav>☰</button>
+        <div class="navlinks" data-navlinks>
+          <a href="index.html#features">Features</a>
+          <a href="index.html#start">Get started</a>
+          <a href="docs.html">Docs</a>
+          <a class="btn primary" href="https://github.com/wess/goose">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <header class="dochero">
+      <div class="wrap">
+        <div class="eyebrow">Documentation</div>
+        <h2 style="font-size: clamp(28px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em">Everything about Goose.</h2>
+        <p class="sub">
+          The full reference lives as Markdown in the <code>docs/</code> folder, split by audience — package-manager users
+          and library builders. Each card links straight to the source document.
+        </p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="docsection">Overview</div>
+      <div class="docgrid">
+        <a class="doccard" href="../docs/index.md">
+          <div class="t"><span class="ico">📖</span> Docs home</div>
+          <p>What Goose is, the doc map, and where to start by audience.</p>
+        </a>
+        <a class="doccard" href="../README.md">
+          <div class="t"><span class="ico">📄</span> Readme</div>
+          <p>The project overview, feature list, install paths, and quick start.</p>
+        </a>
+      </div>
+
+      <div class="docsection">Package manager · CLI users</div>
+      <div class="docgrid">
+        <a class="doccard" href="../docs/packagemanager/start.md">
+          <div class="t"><span class="ico">🚀</span> Getting started</div>
+          <p>Install, scaffold a project, and get to your first build and run.</p>
+        </a>
+        <a class="doccard" href="../docs/packagemanager/commands.md">
+          <div class="t"><span class="ico">⌨️</span> Commands</div>
+          <p>Every verb: new, init, build, run, test, clean, add, remove, update, install.</p>
+        </a>
+        <a class="doccard" href="../docs/packagemanager/configuration.md">
+          <div class="t"><span class="ico">⚙️</span> Configuration</div>
+          <p>The goose.yaml schema — project, build, dependencies, plugins, tasks.</p>
+        </a>
+        <a class="doccard" href="../docs/packagemanager/dependencies.md">
+          <div class="t"><span class="ico">🔗</span> Dependencies</div>
+          <p>Git and path deps, versions, lock files, and transitive resolution.</p>
+        </a>
+        <a class="doccard" href="../docs/packagemanager/packages.md">
+          <div class="t"><span class="ico">📦</span> Authoring packages</div>
+          <p>Make any git repo a goose package with the include/ + src/ convention.</p>
+        </a>
+        <a class="doccard" href="../docs/packagemanager/plugins.md">
+          <div class="t"><span class="ico">🔌</span> Plugins</div>
+          <p>Custom transpilers for .l, .y, or any extension, run before compilation.</p>
+        </a>
+      </div>
+
+      <div class="docsection">Library · tool & language-plugin builders</div>
+      <div class="docgrid">
+        <a class="doccard" href="../docs/library/index.md">
+          <div class="t"><span class="ico">🧱</span> Overview</div>
+          <p>libgoose.a as a generic framework, and how consumers plug in.</p>
+        </a>
+        <a class="doccard" href="../docs/library/start.md">
+          <div class="t"><span class="ico">⚡</span> Quickstart</div>
+          <p>Link against the static library and build a small tool on goose.yaml.</p>
+        </a>
+        <a class="doccard" href="../docs/library/framework.md">
+          <div class="t"><span class="ico">🏗️</span> Framework</div>
+          <p>The GooseFramework struct, the callback slots, and dispatch.</p>
+        </a>
+        <a class="doccard" href="../docs/library/api.md">
+          <div class="t"><span class="ico">🔗</span> API Reference</div>
+          <p>The full framework API — setters, registrars, and userdata.</p>
+        </a>
+        <a class="doccard" href="../docs/library/examples.md">
+          <div class="t"><span class="ico">🧪</span> Examples</div>
+          <p>Worked examples, including a toy Rust frontend on the framework.</p>
+        </a>
+      </div>
+
+      <div class="docsection">Source</div>
+      <div class="docgrid">
+        <a class="doccard" href="https://github.com/wess/goose">
+          <div class="t"><span class="ico">🐙</span> GitHub</div>
+          <p>Browse the source, releases, and example projects on GitHub.</p>
+        </a>
+        <a class="doccard" href="https://github.com/wess/goose/issues">
+          <div class="t"><span class="ico">🐞</span> Issues</div>
+          <p>Report a bug or request a feature on the issue tracker.</p>
+        </a>
+        <a class="doccard" href="https://github.com/wess/goose/releases">
+          <div class="t"><span class="ico">🏷️</span> Releases</div>
+          <p>Pre-built packages: .tar.gz, .deb, .rpm, and Arch PKGBUILD.</p>
+        </a>
+      </div>
+    </main>
+
+    <footer style="margin-top: 60px">
+      <div class="wrap">
+        <a class="brand" href="index.html"><span class="mark">🦢</span> Goose</a>
+        <div class="links">
+          <a href="index.html">Home</a>
+          <a href="../docs/index.md">Docs source</a>
+          <a href="../README.md">Readme</a>
+          <a href="https://github.com/wess/goose">GitHub</a>
+        </div>
+        <span>MIT · © 2026</span>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

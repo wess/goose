@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goose — a package manager for C, inspired by Cargo</title>
+    <meta
+      name="description"
+      content="Goose is a Cargo-inspired package manager and build tool for C. Project scaffolding, git and path dependencies, lock files, tasks, tests, plugins, and a generic libgoose.a framework — all driven by a single goose.yaml."
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>:root{--accent:#e8a33d;--accent2:#c2410c}</style>
+  </head>
+  <body>
+    <!-- nav -->
+    <nav class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><span class="mark">🦢</span> Goose</a>
+        <button class="navtoggle" aria-label="Menu" data-nav>☰</button>
+        <div class="navlinks" data-navlinks>
+          <a href="#features">Features</a>
+          <a href="#start">Get started</a>
+          <a href="docs.html">Docs</a>
+          <a class="btn primary" href="https://github.com/wess/goose">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- hero -->
+    <header class="hero">
+      <div class="wrap">
+        <span class="pill"><span class="dot"></span> Cargo for C · one binary · one goose.yaml</span>
+        <h1>A package manager for C, <span class="accent">inspired by Cargo</span>.</h1>
+        <p class="lead">
+          Goose handles project scaffolding, dependency management, building, testing, and installation — all through a
+          single command-line tool and a simple <code>goose.yaml</code> configuration file.
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#start">Get started</a>
+          <a class="btn ghost" href="https://github.com/wess/goose">View on GitHub →</a>
+        </div>
+
+        <!-- terminal mockup -->
+        <div class="mock">
+          <div class="bar">
+            <span class="hash">$</span><span>goose</span>
+            <span class="muted" style="font-size: 13px">· cargo-style C tooling</span>
+            <span class="dots"><i></i><i></i><i></i></span>
+          </div>
+          <div class="body">
+            <div class="msg">
+              <div class="av">🦢</div>
+              <div>
+                <div class="who">goose new myapp</div>
+                <div class="txt">Created new goose project 'myapp'</div>
+              </div>
+            </div>
+            <div class="msg">
+              <div class="av" style="background: linear-gradient(135deg, #e8a33d, #c2410c)">⚙️</div>
+              <div>
+                <div class="who">goose run</div>
+                <div class="txt">Building myapp v0.1.0 (debug) · Compiling myapp · Finished build/debug/myapp</div>
+              </div>
+            </div>
+            <div class="msg">
+              <div class="av">▶️</div>
+              <div>
+                <div class="who">Running ./build/debug/myapp</div>
+                <div class="txt">Hello from myapp!</div>
+              </div>
+            </div>
+            <div class="msg">
+              <div class="av" style="background: linear-gradient(135deg, #e8a33d, #c2410c)">✅</div>
+              <div>
+                <div class="who">goose test</div>
+                <div class="typing"><i></i><i></i><i></i> Results 2 passed, 0 failed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- features -->
+    <section class="block" id="features">
+      <div class="wrap">
+        <div class="eyebrow">Features</div>
+        <h2>Everything you reach for in Cargo — built for C.</h2>
+        <p class="sub">Scaffold, depend, build, test, and ship from one tool and one manifest.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="ico">📦</div>
+            <h3>Project scaffolding</h3>
+            <p><code>goose new</code> creates a ready-to-build project, complete with a goose.yaml, src/main.c, and .gitignore.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔗</div>
+            <h3>Dependency management</h3>
+            <p>Add packages from any git repository or a local path. Transitive dependencies resolve recursively into packages/.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🗂️</div>
+            <h3>Path dependencies</h3>
+            <p>Use <code>path:</code> for local packages — like Cargo's <code>path = "..."</code> — ideal for monorepos and submodules.</p>
+          </div>
+          <div class="card">
+            <div class="ico">⚙️</div>
+            <h3>Automatic builds</h3>
+            <p>Discovers <code>.c</code> files, resolves include paths from each package, then compiles and links in one command.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🐛</div>
+            <h3>Debug & release modes</h3>
+            <p><code>-g -DDEBUG</code> by default, <code>-O2 -DNDEBUG</code> with <code>--release</code> — into separate build dirs.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔒</div>
+            <h3>Lock file</h3>
+            <p><code>goose.lock</code> pins exact commit SHAs for reproducible builds; verified on every build.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🏃</div>
+            <h3>Task runner</h3>
+            <p>Define named shell commands in goose.yaml and run them with <code>goose task</code> — unknown verbs fall back to tasks.</p>
+          </div>
+          <div class="card">
+            <div class="ico">✅</div>
+            <h3>Test runner</h3>
+            <p>Drop <code>.c</code> files in <code>tests/</code>. Each is compiled and run independently — exit 0 means pass.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔌</div>
+            <h3>Plugin system</h3>
+            <p>Custom transpilers for <code>.l</code>, <code>.y</code>, or any extension run before compilation into build/gen/.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔄</div>
+            <h3>CMake conversion</h3>
+            <p>Auto-converts <code>CMakeLists.txt</code> packages to goose.yaml when fetched — no manual porting.</p>
+          </div>
+          <div class="card">
+            <div class="ico">⬇️</div>
+            <h3>Install command</h3>
+            <p>Build a release binary and install it to your system with <code>goose install</code> and an optional prefix.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🧱</div>
+            <h3>Library mode</h3>
+            <p><code>libgoose.a</code> is a generic framework — build your own Cargo-like tool for any language via callbacks.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- how it works / architecture -->
+    <section class="block" id="architecture">
+      <div class="wrap">
+        <div class="eyebrow">How it works</div>
+        <h2>A generic framework with C as the first plugin.</h2>
+        <div class="split">
+          <ul>
+            <li><span class="ck">✦</span><span><b>One manifest</b> — <code>goose.yaml</code> describes the project, build flags, dependencies, plugins, and tasks.</span></li>
+            <li><span class="ck">✦</span><span><b>Language-agnostic core</b> — the framework knows nothing about C; it dispatches commands and resolves deps.</span></li>
+            <li><span class="ck">✦</span><span><b>Consumer plugins</b> — the C toolchain is wired up through a <code>GooseFramework</code> with build/test/run callbacks.</span></li>
+            <li><span class="ck">✦</span><span><b>Reproducible</b> — <code>goose.lock</code> records commit SHAs; builds check HEAD against the lock.</span></li>
+            <li><span class="ck">✦</span><span><b>Zero system deps</b> — libyaml is vendored and compiled from source; nothing to install first.</span></li>
+          </ul>
+          <div class="diagram">              goose.yaml
+                  │
+        goose &lt;verb&gt; (CLI dispatch)
+                  │
+       framework core (libgoose.a)
+                  │
+      ┌───────────┴───────────┐
+  resolve deps           C consumer
+ git · path · lock     cc · cflags · link
+                  │
+            build/debug/&lt;app&gt;</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- get started -->
+    <section class="block" id="start">
+      <div class="wrap">
+        <div class="eyebrow">Get started</div>
+        <h2>Up and running in a minute.</h2>
+        <p class="sub">Install with Homebrew (or the shell script), scaffold a project, and build.</p>
+        <div class="code" style="margin-top: 32px; max-width: 720px">
+          <div class="top">
+            <span>terminal</span>
+            <button class="copy" data-copy>Copy</button>
+          </div>
+          <pre data-code><span class="c"># 1. install (macOS, Homebrew)</span>
+brew tap wess/goose
+brew install goose
+
+<span class="c"># or install via the shell script</span>
+curl -fsSL https://raw.githubusercontent.com/wess/goose/main/install.sh | sh
+
+<span class="c"># 2. create a new project</span>
+goose new myapp
+cd myapp
+
+<span class="c"># 3. build and run</span>
+goose run   <span class="c"># → Hello from myapp!</span></pre>
+        </div>
+
+        <div class="code" style="margin-top: 24px; max-width: 720px">
+          <div class="top">
+            <span>add a dependency</span>
+            <button class="copy" data-copy>Copy</button>
+          </div>
+          <pre data-code><span class="c"># add a git dependency (optionally pin a version)</span>
+goose add https://github.com/user/mylib.git --version v1.0.0
+
+<span class="c"># build with the lock file, then run the tests</span>
+goose build
+goose test</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- cta band -->
+    <section class="band">
+      <div class="wrap">
+        <h2>Bring Cargo's workflow to your C projects.</h2>
+        <p>Open source under the MIT license. Install the CLI, or build your own package manager on top of libgoose.a.</p>
+        <div class="cta">
+          <a class="btn primary" href="docs.html">Read the docs</a>
+          <a class="btn ghost" href="https://github.com/wess/goose">View on GitHub →</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <a class="brand" href="index.html"><span class="mark">🦢</span> Goose</a>
+        <div class="links">
+          <a href="docs.html">Docs</a>
+          <a href="../docs/packagemanager/start.md">Getting started</a>
+          <a href="../docs/library/index.md">Library</a>
+          <a href="https://github.com/wess/goose">GitHub</a>
+        </div>
+        <span>MIT · © 2026</span>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
