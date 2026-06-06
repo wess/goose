@@ -13,6 +13,6 @@ build:
 
 dependencies:
   mathlib:
-    git: "https://github.com/youruser/mathlib.git"
+    path: "../mathlib"
   stringlib:
-    git: "https://github.com/youruser/stringlib.git"
+    path: "../stringlib"

@@ -21,7 +21,10 @@ BIN      = $(BUILD)/goose
 
 PREFIX  ?= /usr/local
 
-.PHONY: all lib cli clean install uninstall
+CLANG_FORMAT ?= clang-format
+FMT_SRC = $(wildcard src/*.c src/*.h src/cmd/*.c src/cc/*.c src/cc/*.h src/headers/*.h include/*.h)
+
+.PHONY: all lib cli clean install uninstall test fmt lint
 
 all: lib cli
 
@@ -55,6 +58,15 @@ $(OBJDIR):
 
 clean:
 	rm -rf $(BUILD)
+
+test: all
+	sh tests/run.sh
+
+fmt:
+	$(CLANG_FORMAT) -i $(FMT_SRC)
+
+lint:
+	$(CLANG_FORMAT) --dry-run --Werror $(FMT_SRC)
 
 install: all
 	install -d $(PREFIX)/bin

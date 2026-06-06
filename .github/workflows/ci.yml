@@ -8,7 +8,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,3 +24,24 @@ jobs:
 
       - name: Verify library
         run: test -f build/libgoose.a
+
+      - name: Functional tests
+        run: make test
+
+      - name: Build and run example
+        run: |
+          cd examples/mathapp
+          ../../build/goose build
+          ../../build/goose run
+
+  format:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: make lint
