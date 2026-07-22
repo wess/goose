@@ -445,3 +445,5 @@ Full documentation lives under [`docs/`](docs/index.md), split by audience:
 ## License
 
 MIT
+
+♥ [Sponsor this project](https://github.com/sponsors/wess)
